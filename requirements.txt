@@ -1,0 +1,4 @@
+requests>=2.28
+openpyxl>=3.1
+pypdf>=3.0
+flask>=3.0

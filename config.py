@@ -1,0 +1,118 @@
+"""
+config.py — every setting you can change lives in this file.
+
+Open this file, edit the values between the "=====" markers, save, and run:
+
+    python main.py
+
+The pipeline is:
+
+    search (keywords -> websites)  ->  output/search_results.xlsx
+    -> for each paper: try to get its full text (open access only)
+         open   -> feed to a local/hosted LLM -> output/extracted_data.xlsx
+         closed -> output/closed_source_papers.xlsx
+
+See README.md for a full walkthrough of where everything is and what to change.
+"""
+
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+OUTPUT_DIR = BASE_DIR / "output"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# ==================== 1. SEARCH ====================
+
+# Your search queries. Use plain boolean logic: AND, OR, NOT, parentheses.
+# These work across PubMed, Europe PMC and Crossref.
+QUERIES = [
+    "nicotinic acetylcholine receptor AND mutation AND (electrophysiology OR patch-clamp)",
+    "nicotinic acetylcholine receptor AND mutation AND (gain-of-function OR loss-of-function)",
+]
+
+# Which websites to search. Delete the ones you don't want.
+#   "pubmed"    -> NCBI PubMed (E-utilities API)  — needs NCBI_EMAIL below
+#   "europepmc" -> Europe PMC (REST API)          — free, no key
+#   "crossref"  -> Crossref (REST API)            — free, no key; great for DOI metadata
+SOURCES = ["pubmed", "europepmc", "crossref"]
+
+# Safety cap: max results per query, per source. Raise/lower as you like.
+MAX_RESULTS_PER_QUERY = 50
+
+# NCBI policy REQUIRES an email for PubMed access. Use your real one.
+# (It is only used for contact / rate-limiting, not authentication.)
+NCBI_EMAIL = "you@uni.de"
+
+# Optional: an NCBI API key raises your PubMed rate limit (free at
+# https://www.ncbi.nlm.nih.gov/account/). Leave "" if you don't have one.
+NCBI_API_KEY = ""
+
+# Politeness: seconds to sleep between API requests. Don't set this to 0.
+SLEEP_SECONDS = 0.4
+HTTP_TIMEOUT = 30
+HTTP_HEADERS = {"User-Agent": f"general-datascraper/1.0 (mailto:{NCBI_EMAIL})"}
+
+# ==================== 2. LLM (local or hosted) ====================
+
+# Which model backend to use:
+#   "ollama" -> a model running locally on your computer (free, private, offline)
+#   "openai" -> any OpenAI-compatible HTTP API (e.g. KI connect NRW, Gemini, etc.)
+LLM_BACKEND = "ollama"
+
+# --- Ollama (local) ---
+OLLAMA_URL   = "http://localhost:11434"     # default Ollama port
+OLLAMA_MODEL = "qwen2.5:7b-instruct"        # your model (see: ollama list)
+
+# --- OpenAI-compatible (e.g. KI connect NRW) ---
+# Set LLM_BACKEND = "openai" and fill these in. Your institution gives you a
+# base URL + key (see README.md -> "Using KI connect NRW").
+OPENAI_BASE_URL = ""     # e.g. "https://<your-endpoint>/v1"
+OPENAI_API_KEY  = ""
+OPENAI_MODEL    = ""     # model name your provider expects
+
+# Generation settings (used by both backends)
+NUM_CTX     = 32768      # context window: how much text the model can read at once
+NUM_PREDICT = 8192       # max tokens in the answer
+TEMPERATURE = 0.1        # 0.1 = consistent, predictable (good for extraction)
+MAX_CHARS   = 90000      # cap each paper at this many characters before asking (~fits the context window)
+
+# ==================== 3. EXTRACTION: what to pull out ====================
+
+# Plain-English instructions to the model: what a "record" is, what to skip.
+INSTRUCTION = """\
+You are a careful research assistant. Read the TEXT below and extract every
+record that matches the requested task.
+
+Rules:
+- Include every record that is clearly stated or measured in the text.
+- If a specific value is missing, leave that field empty instead of guessing.
+- If no matching records are described, return an empty list [].
+"""
+
+# The columns you want in the output spreadsheet. Each line is:
+#   ("column name", "kind" [, [allowed values]])
+#   kinds:  "text"   -> any text
+#           "number" -> a whole number
+#           "choice" -> the model must pick one of the allowed values you list
+FIELDS = [
+    ("subunit",     "text"),
+    ("mutation",    "text"),
+    ("position",    "number"),
+    ("effect",      "choice", ["GOF", "LOF", "No effect"]),
+    ("technique",   "text"),
+]
+
+# ==================== 4. OUTPUT FILES (you usually won't change these) ====================
+
+SEARCH_RESULTS_XLSX = OUTPUT_DIR / "search_results.xlsx"
+CLOSED_SOURCE_XLSX  = OUTPUT_DIR / "closed_source_papers.xlsx"
+EXTRACTED_XLSX      = OUTPUT_DIR / "extracted_data.xlsx"
+CHECKPOINT_JSON     = OUTPUT_DIR / "checkpoint.json"
+
+# ==================== 5. WEB APP ====================
+
+# Run the local web app with:  python app.py   (or double-click start.bat)
+APP_HOST      = "127.0.0.1"   # only reachable from this computer (safest)
+APP_PORT      = 5000
+APP_AUTO_OPEN = True          # open the browser automatically on start
+DEFAULT_MAX_RESULTS = 50      # default "max results" shown in the search form

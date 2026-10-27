@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Data Extractor</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="logo">Data Extractor</span>
+      </div>
+      <div class="topbar-links">
+        <button id="ollama-pill" class="pill pill-unknown" title="Click to re-check" onclick="checkStatus()">Checking Ollama…</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div id="banner" class="banner hidden"></div>
+
+    <!-- 1. Search -->
+    <section class="card">
+      <h2><span class="step">1</span> Search for papers</h2>
+
+      <label class="field-label">Search terms</label>
+      <div id="term-list"></div>
+      <button class="ghost-btn" id="add-term" type="button">+ Add another term</button>
+
+      <div class="row">
+        <div class="col">
+          <label class="field-label">Websites to search</label>
+          <div id="source-list" class="checkbox-group"></div>
+        </div>
+        <div class="col col-narrow">
+          <label class="field-label" for="max-results">Max results / site</label>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" data-numeric id="max-results" value="50">
+        </div>
+      </div>
+
+      <button class="primary-btn" id="search-btn" onclick="doSearch()">Search papers</button>
+    </section>
+
+    <!-- 2. Extract -->
+    <section class="card">
+      <h2><span class="step">2</span> Extract data from the papers</h2>
+      <p class="hint">This reads the open-access full texts of the papers you found and asks the
+        model to pull out what you ask for. Closed papers are logged separately.</p>
+
+      <label class="field-label" for="goal">What data do you want from the papers?</label>
+      <textarea id="goal" rows="3" placeholder="e.g. Every mutation that was tested, and whether it increased or decreased channel function"></textarea>
+
+      <label class="field-label" for="columns">Column names for the spreadsheet <span class="muted">(comma-separated, optional)</span></label>
+      <input type="text" id="columns" placeholder="e.g. mutation, effect, position">
+
+      <button class="primary-btn" id="extract-btn" onclick="doExtract()">Extract data</button>
+    </section>
+
+    <!-- Progress -->
+    <section id="progress-card" class="card hidden">
+      <h2>Working…</h2>
+      <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
+      <p id="progress-status" class="progress-status"></p>
+      <pre id="log" class="log"></pre>
+    </section>
+
+    <!-- Results -->
+    <section id="results-card" class="card hidden">
+      <div class="results-head">
+        <h2>Results</h2>
+        <div class="results-actions">
+          <button class="ghost-btn" onclick="openOutputFolder()">📂 Open output folder</button>
+          <button class="ghost-btn" id="dl-search" onclick="downloadFile('search_results.xlsx')">⬇ search_results.xlsx</button>
+          <button class="ghost-btn" id="dl-extracted" onclick="downloadFile('extracted_data.xlsx')">⬇ extracted_data.xlsx</button>
+          <button class="ghost-btn" id="dl-closed" onclick="downloadFile('closed_source_papers.xlsx')">⬇ closed_source_papers.xlsx</button>
+        </div>
+      </div>
+
+      <h3 class="subhead">Papers found <span id="search-count" class="muted"></span></h3>
+      <div id="search-table" class="table-wrap"></div>
+
+      <h3 class="subhead">Extracted data <span id="extracted-count" class="muted"></span></h3>
+      <div id="extracted-table" class="table-wrap"></div>
+    </section>
+
+    <details class="card settings">
+      <summary>Settings</summary>
+      <div class="row">
+        <div class="col">
+          <label class="field-label" for="set-email">Your email (required by PubMed)</label>
+          <input type="text" id="set-email" placeholder="you@uni.de">
+        </div>
+        <div class="col">
+          <label class="field-label" for="set-model">Ollama model</label>
+          <input type="text" id="set-model" placeholder="qwen2.5:7b-instruct">
+        </div>
+        <div class="col col-narrow">
+          <label class="field-label" for="set-max">Default max results</label>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" data-numeric id="set-max" value="50">
+        </div>
+      </div>
+      <button class="ghost-btn" onclick="saveSettings()">Save settings</button>
+    </details>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
