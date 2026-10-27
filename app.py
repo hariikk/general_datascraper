@@ -172,12 +172,12 @@ def make_instruction(goal):
     return (
         "You are an expert research assistant. Read the full paper TEXT below very carefully.\n"
         f"Task: {goal}\n\n"
-        "Rules:\n"
+        "IMPORTANT RULES:\n"
         "- Extract EVERY record that matches the task. Do not skip any, and do not merge\n"
         "  separate records into one row.\n"
-        "- Only report information that is explicitly stated in the TEXT. Do not invent,\n"
-        "  infer, or copy values from memory or from outside the paper.\n"
-        "- If a value is not stated in the text, leave that field empty instead of guessing.\n"
+        "- NEVER invent, guess, or use outside knowledge. Only report what is explicitly\n"
+        "  written in the TEXT. If it is not in the paper, do not put it in the answer.\n"
+        "- If a value is missing, leave that field empty — do not make one up.\n"
         "- Keep wording and values consistent with how they appear in the paper.\n"
         "- If no record matches the task, return an empty list []."
     )

@@ -85,6 +85,7 @@ record that matches the requested task.
 
 Rules:
 - Include every record that is clearly stated or measured in the text.
+- NEVER invent or guess. Only report what is explicitly written in the TEXT.
 - If a specific value is missing, leave that field empty instead of guessing.
 - If no matching records are described, return an empty list [].
 """
