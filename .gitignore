@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+output/pdfs/
+output/checkpoint.json
+output/local_pdfs.json
+output/prompt_history.json
+output/pdf_index.json
+output/annotated_pdfs/
+output/figures/
+output/runs/
+output/active_run.json
+output/*.xlsx
