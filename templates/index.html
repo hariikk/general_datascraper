@@ -21,13 +21,67 @@
   <main>
     <div id="banner" class="banner hidden"></div>
 
+    <!-- 0. Run folders -->
+    <section id="runs-card" class="card hidden" aria-labelledby="runs-heading">
+      <h2 id="runs-heading">Runs</h2>
+      <p class="hint">Every new Search gets its own run folder, including its search
+        results, extracted data, checkpoint, PDFs and figures. Loading a saved run
+        switches the app back to that folder; nothing runs until you click a button.</p>
+      <div id="run-current" class="run-current"></div>
+      <div class="history-row">
+        <label class="field-label history-label" for="run-select">Saved runs</label>
+        <select id="run-select" class="history-select" disabled>
+          <option value="">No saved runs yet</option>
+        </select>
+      </div>
+      <div class="run-actions">
+        <button class="ghost-btn" id="run-load" type="button"
+                onclick="loadSelectedRun()" disabled>Load run</button>
+        <button class="ghost-btn" id="run-refresh" type="button"
+                onclick="refreshActiveRun()" title="Search again and merge new papers into this run"
+                disabled>Refresh search</button>
+        <button class="ghost-btn danger" id="run-delete" type="button"
+                onclick="deleteSelectedRun()" disabled>Delete run</button>
+      </div>
+      <p class="hint run-hint">Load an old run, then use <strong>Refresh search</strong> to merge
+        new results into it. A normal Search always starts a new run. The active run cannot
+        be deleted until you load another one.</p>
+    </section>
+
     <!-- 1. Search -->
     <section class="card">
       <h2><span class="step">1</span> Search for papers</h2>
 
+      <div class="history-row">
+        <label class="field-label history-label" for="history-search">Previous searches</label>
+        <select id="history-search" class="history-select" disabled>
+          <option value="">No previous searches yet</option>
+        </select>
+        <button class="ghost-btn mini" id="history-search-clear" type="button"
+                aria-label="Clear previous searches" title="Clear previous searches" disabled>Clear</button>
+      </div>
+
       <label class="field-label">Search terms</label>
-      <div id="term-list"></div>
-      <button class="ghost-btn" id="add-term" type="button">+ Add another term</button>
+      <p class="hint">Combine rows with AND/OR/NOT and groups with AND/OR/NOT. A group
+        set to NOT is excluded from the part of the query before it, so
+        <code>A AND B NOT (predatory OR questionable)</code> finds A and B while
+        dropping anything that matches the NOT group. Select rows or groups
+        with the checkboxes, then wrap them into a nested group. Click a group header to cycle
+        its selection (group → members → group). Multi-word terms are quoted automatically.</p>
+      <div id="term-list" class="query-builder"></div>
+      <div class="query-actions">
+        <button class="ghost-btn" id="add-term" type="button">+ Add term</button>
+        <button class="ghost-btn" id="add-group" type="button">+ Add group</button>
+        <button class="ghost-btn" id="wrap-selected" type="button">Wrap selected in group</button>
+        <button class="ghost-btn" id="suggest-all" type="button" title="Expand every term with related terms (LLM)">✨ Suggest related terms</button>
+      </div>
+
+      <div id="global-suggest-panel" class="suggest-panel global-suggest-panel hidden"></div>
+
+      <div class="query-preview-wrap">
+        <span class="field-label">Query preview</span>
+        <code id="query-preview" class="query-preview">(empty query)</code>
+      </div>
 
       <div class="row">
         <div class="col">
@@ -38,8 +92,45 @@
           <label class="field-label" for="max-results">Max results / site</label>
           <input type="text" inputmode="numeric" pattern="[0-9]*" data-numeric id="max-results" value="50">
         </div>
+        <div class="col col-years">
+          <label class="field-label">Publication years <span class="muted">(optional)</span></label>
+          <div class="year-range">
+            <div class="year-field">
+              <label class="year-label" for="year-from">From year</label>
+              <input type="text" inputmode="numeric" pattern="[0-9]{4}" maxlength="4"
+                     data-numeric id="year-from" placeholder="e.g. 2015">
+            </div>
+            <div class="year-field">
+              <label class="year-label" for="year-to">To year</label>
+              <input type="text" inputmode="numeric" pattern="[0-9]{4}" maxlength="4"
+                     data-numeric id="year-to" placeholder="e.g. 2024">
+            </div>
+          </div>
+          <p class="hint year-hint">Four digits (e.g. 2015). Leave a box blank for no limit.</p>
+        </div>
       </div>
 
+      <label class="field-label" for="local-folder">Local PDF folder <span class="muted">(optional)</span></label>
+      <div class="local-folder-row">
+        <input type="text" id="local-folder" placeholder="e.g. C:\Users\me\Papers">
+        <label class="checkbox-inline" for="local-recursive">
+          <input type="checkbox" id="local-recursive"> Include subfolders
+        </label>
+      </div>
+      <p class="hint">Point at a folder of PDFs to extract them without a search (clear the
+        search terms and websites), or combine them with a normal online search. PDFs are
+        copied into <code>output/pdfs/</code>, so the output stays self-contained.</p>
+
+      <label class="field-label" for="excluded-journals">Exclude journals <span class="muted">(optional, one per line)</span></label>
+      <textarea id="excluded-journals" rows="3" placeholder="e.g. Predatory Journal of Examples&#10;Journal of Questionable Results"></textarea>
+      <p class="hint">One journal name per line. Matching is case-insensitive and uses
+        substrings, so differences in capitalisation, spacing, or extra punctuation are
+        caught too. It is applied after the search, to the combined results from every
+        website; papers with no journal name are never excluded.</p>
+
+      <p class="hint run-search-hint" id="run-search-hint">A normal <strong>Search</strong> creates a new run folder and
+        replaces that folder's dataset. To add new results to an existing run, load it in
+        <strong>Runs</strong> above and click <strong>Refresh search</strong>.</p>
       <button class="primary-btn" id="search-btn" onclick="doSearch()">Search papers</button>
     </section>
 
@@ -50,10 +141,47 @@
         model to pull out what you ask for. Closed papers are logged separately.</p>
 
       <label class="field-label" for="goal">What data do you want from the papers?</label>
+      <div class="history-row">
+        <label class="history-label" for="history-goal">Previous goals</label>
+        <select id="history-goal" class="history-select" disabled>
+          <option value="">No previous goals yet</option>
+        </select>
+        <button class="ghost-btn mini" id="history-goal-clear" type="button"
+                aria-label="Clear previous goals" title="Clear previous goals" disabled>Clear</button>
+      </div>
       <textarea id="goal" rows="3" placeholder="e.g. Every mutation that was tested, and whether it increased or decreased channel function"></textarea>
+      <div class="goal-suggest-row">
+        <button class="ghost-btn" id="improve-goal" type="button"
+                aria-label="Improve the extraction goal with the LLM"
+                title="Ask the configured LLM for clearer goal wording"
+                onclick="improveGoal()">✨ Improve goal</button>
+        <span class="hint goal-suggest-hint">Rewrites the wording only; nothing runs until you click <strong>Extract data</strong>.</span>
+      </div>
+      <div id="goal-suggest-panel" class="suggest-panel goal-suggest-panel hidden"
+           role="region" aria-live="polite" aria-label="Improved goal suggestions"></div>
+      <p class="hint figures-goal-hint">Figures and tables are selected from this goal.
+        To collect them, ask for figures, images or tables in the goal above
+        (e.g. “Find figures showing current traces for each mutation”).</p>
 
       <label class="field-label" for="columns">Column names for the spreadsheet <span class="muted">(comma-separated, optional)</span></label>
+      <div class="history-row">
+        <label class="history-label" for="history-columns">Previous columns</label>
+        <select id="history-columns" class="history-select" disabled>
+          <option value="">No previous columns yet</option>
+        </select>
+        <button class="ghost-btn mini" id="history-columns-clear" type="button"
+                aria-label="Clear previous columns" title="Clear previous columns" disabled>Clear</button>
+      </div>
       <input type="text" id="columns" placeholder="e.g. mutation, effect, position">
+      <p class="hint">Paper key, row number, evidence/page and PDF columns are added automatically; those names are reserved.</p>
+
+      <label class="field-label" for="extraction-mode">Extraction mode</label>
+      <select id="extraction-mode">
+        <option value="records" selected>Individual records — one row per distinct record</option>
+        <option value="table">Table rows — one row per row of a results table, never merged</option>
+      </select>
+      <p class="hint">Use <strong>Table rows</strong> when the paper reports a table and you want every
+        table row kept separate. Individual records is the safer default for prose and mixed papers.</p>
 
       <button class="primary-btn" id="extract-btn" onclick="doExtract()">Extract data</button>
     </section>
@@ -62,7 +190,11 @@
     <section id="progress-card" class="card hidden">
       <h2>Working…</h2>
       <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
-      <p id="progress-status" class="progress-status"></p>
+      <div class="progress-status-row">
+        <p id="progress-status" class="progress-status"></p>
+        <button id="cancel-job" class="ghost-btn cancel-btn hidden" type="button"
+                aria-label="Cancel the running job" onclick="cancelJob()" disabled>Cancel job</button>
+      </div>
       <pre id="log" class="log"></pre>
     </section>
 
@@ -75,15 +207,94 @@
           <button class="ghost-btn" id="dl-search" onclick="downloadFile('search_results.xlsx')">⬇ search_results.xlsx</button>
           <button class="ghost-btn" id="dl-extracted" onclick="downloadFile('extracted_data.xlsx')">⬇ extracted_data.xlsx</button>
           <button class="ghost-btn" id="dl-closed" onclick="downloadFile('closed_source_papers.xlsx')">⬇ closed_source_papers.xlsx</button>
+          <button class="ghost-btn hidden" id="dl-figures" onclick="downloadFile('figures.xlsx')">⬇ figures.xlsx</button>
         </div>
       </div>
 
-      <h3 class="subhead">Papers found <span id="search-count" class="muted"></span></h3>
-      <div id="search-table" class="table-wrap"></div>
+      <div class="tabs" role="tablist" aria-label="Results views">
+        <button class="tab-btn active" id="tab-btn-search" role="tab" type="button"
+                aria-selected="true" aria-controls="tab-search" data-tab="search">Search &amp; Extract</button>
+        <button class="tab-btn" id="tab-btn-data" role="tab" type="button"
+                aria-selected="false" aria-controls="tab-data" data-tab="data" tabindex="-1">Data &amp; PDFs
+          <span id="data-tab-count" class="tab-count"></span></button>
+      </div>
 
-      <h3 class="subhead">Extracted data <span id="extracted-count" class="muted"></span></h3>
-      <div id="extracted-table" class="table-wrap"></div>
+      <div id="tab-search" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-search">
+        <h3 class="subhead">Papers found <span id="search-count" class="muted"></span></h3>
+        <div id="search-table" class="table-wrap"></div>
+        <p class="hint tab-hint">Extracted rows are grouped by paper in the <strong>Data &amp; PDFs</strong> tab.</p>
+      </div>
+
+      <div id="tab-data" class="tab-panel hidden" role="tabpanel" aria-labelledby="tab-btn-data">
+        <div class="data-layout">
+          <div class="data-main">
+            <div class="data-summary">
+              <span id="extracted-count" class="muted"></span>
+              <span id="paper-group-count" class="muted"></span>
+            </div>
+            <div id="data-groups"></div>
+          </div>
+          <aside class="pdf-pane" aria-label="Selected paper and PDF">
+            <div id="pdf-placeholder" class="pdf-placeholder">
+              <div class="pdf-placeholder-icon" aria-hidden="true">📄</div>
+              <p class="pdf-placeholder-title">Select a data row to view its source PDF</p>
+              <p class="muted">The evidence quote and the highlighted PDF will appear here.</p>
+            </div>
+            <div id="selection-details" class="selection-details hidden">
+              <div id="selection-summary"></div>
+              <div id="evidence-panel" class="evidence-placeholder">
+                <p class="field-label">Evidence</p>
+                <p id="evidence-text" class="evidence-text"></p>
+                <p id="evidence-meta" class="evidence-meta"></p>
+              </div>
+              <div class="pdf-slot">
+                <div class="pdf-slot-head">
+                  <p class="pdf-slot-title">Source PDF</p>
+                  <a id="pdf-new-tab" class="pdf-open-link" href="#" target="_blank"
+                     rel="noopener" hidden>Open in new tab ↗</a>
+                </div>
+                <p id="pdf-unavailable" class="pdf-unavailable hidden">No archived PDF for this paper — only the quote is available.</p>
+                <iframe id="pdf-viewer" class="pdf-viewer hidden"
+                        title="Annotated source PDF"></iframe>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <section id="figures-section" class="figures-section hidden" aria-labelledby="figures-heading">
+          <div class="figures-head">
+            <h3 class="subhead" id="figures-heading">Figures <span id="figures-count" class="muted"></span></h3>
+            <button class="ghost-btn mini" id="dl-figures-gallery"
+                    onclick="downloadFile('figures.xlsx')">⬇ figures.xlsx</button>
+          </div>
+          <p class="hint figures-hint">Figures and tables selected for the extraction goal
+            from the archived PDFs. Captions and page numbers come from the PDF;
+            image-only papers are not OCR'd.</p>
+          <div id="figures-gallery" class="figures-gallery"></div>
+        </section>
+      </div>
     </section>
+
+    <div id="figure-modal" class="figure-modal hidden" role="dialog" aria-modal="true"
+         aria-labelledby="figure-modal-title">
+      <div class="figure-modal-backdrop" data-close-figure></div>
+      <div class="figure-modal-panel" role="document">
+        <button type="button" class="figure-modal-close" id="figure-modal-close"
+                aria-label="Close figure">×</button>
+        <div class="figure-modal-image-wrap">
+          <img id="figure-modal-image" alt="">
+        </div>
+        <div class="figure-modal-body">
+          <p id="figure-modal-label" class="figure-modal-label"></p>
+          <p id="figure-modal-title" class="figure-modal-title"></p>
+          <p id="figure-modal-meta" class="figure-modal-meta"></p>
+          <p id="figure-modal-caption" class="figure-modal-caption"></p>
+          <p id="figure-modal-reason" class="figure-modal-reason" hidden></p>
+          <a id="figure-modal-link" class="figure-modal-link" href="#" target="_blank"
+             rel="noopener">Open image in new tab ↗</a>
+        </div>
+      </div>
+    </div>
 
     <details class="card settings">
       <summary>Settings</summary>
