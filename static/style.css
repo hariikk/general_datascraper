@@ -303,6 +303,17 @@ select {
 .banner.error { background: var(--red-bg); color: var(--red); border: 1px solid #fecaca; }
 .banner.info { background: var(--amber-bg); color: #92400e; border: 1px solid #fde68a; }
 .banner.ok { background: var(--green-bg); color: var(--green); border: 1px solid #bbf7d0; }
+.field-error {
+  color: var(--red); font-size: 0.9rem; font-weight: 600;
+  margin: 10px 0 0; padding: 8px 12px; border-radius: 8px;
+  background: var(--red-bg); border: 1px solid #fecaca;
+}
+.field-warning {
+  color: #92400e; font-size: 0.88rem; font-weight: 600;
+  margin: -8px 0 0; padding: 8px 12px; border-radius: 8px;
+  background: var(--amber-bg); border: 1px solid #fde68a;
+}
+.banner-action { margin-left: 12px; vertical-align: middle; }
 
 /* Progress */
 .progress-track { height: 10px; background: #eef2f7; border-radius: 999px; overflow: hidden; }
