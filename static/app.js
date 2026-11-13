@@ -43,24 +43,38 @@ function setBanner(msg, type, action) {
     btn.onclick = action.onClick;
     b.append(btn);
   }
-}
-
-// Errors from the Extract form must appear next to the button the user just
-// clicked: the shared #banner sits at the top of the page and is off-screen
-// when the user is scrolled down to the Extract controls.
-function setExtractError(msg) {
-  const el = document.getElementById("extract-error");
-  setBanner(msg || "", msg ? "error" : "");
-  if (!el) return;
-  if (msg) {
-    el.textContent = msg;
-    el.classList.remove("hidden");
-    el.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  } else {
-    el.textContent = "";
-    el.classList.add("hidden");
+  // The banner lives at the very top, so a user scrolled down to Search or
+  // Extract would never see it. Bring it into view for errors and for
+  // completion messages that carry a "View results" button.
+  if (type === "error" || action) {
+    b.scrollIntoView({ block: "center", behavior: "smooth" });
   }
 }
+
+// Errors belong under the button the user just clicked: the shared #banner
+// sits at the top of the page and is off-screen while the user works further
+// down. Every form section has its own inline error line.
+function setSectionError(id, msg) {
+  const el = document.getElementById(id);
+  if (!el) {
+    // Fail safe: an older page without the inline element still reports.
+    setBanner(msg || "", msg ? "error" : "");
+    return;
+  }
+  if (!msg) {
+    el.textContent = "";
+    el.classList.add("hidden");
+    return;
+  }
+  el.textContent = msg;
+  el.classList.remove("hidden");
+  el.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+
+function setSearchError(msg) { setSectionError("search-error", msg); }
+function setExtractError(msg) { setSectionError("extract-error", msg); }
+function setSettingsError(msg) { setSectionError("settings-error", msg); }
+function setRunsError(msg) { setSectionError("runs-error", msg); }
 
 function setBusy(running) {
   document.getElementById("search-btn").disabled = running;
@@ -205,7 +219,8 @@ function updateColumnsWarning() {
 
 async function saveSettings() {
   const years = readYearRange();
-  if (years.error) { setBanner(years.error, "error"); return; }
+  setSettingsError("");
+  if (years.error) { setSettingsError(years.error); return; }
   try {
     const body = {
       email: document.getElementById("set-email").value.trim(),
@@ -223,7 +238,7 @@ async function saveSettings() {
     setTimeout(() => setBanner(""), 2000);
     checkStatus();
   } catch (e) {
-    setBanner(e.message, "error");
+    setSettingsError(e.message);
   }
 }
 
@@ -385,7 +400,7 @@ async function clearPromptHistory(kind) {
       2500
     );
   } catch (e) {
-    setBanner(e.message, "error");
+    setSectionError(kind === "search" ? "search-error" : "extract-error", e.message);
   }
 }
 
@@ -531,6 +546,7 @@ async function loadSelectedRun() {
   const select = document.getElementById("run-select");
   const runId = select ? select.value : "";
   if (!runId) return;
+  setRunsError("");
   try {
     const data = await postJSON(
       "/api/runs/" + encodeURIComponent(runId) + "/load",
@@ -540,7 +556,7 @@ async function loadSelectedRun() {
     await loadResults();
     await loadRuns();
   } catch (e) {
-    setBanner(e.message, "error");
+    setRunsError(e.message);
   }
 }
 
@@ -553,18 +569,19 @@ async function deleteSelectedRun() {
   if (!window.confirm(
     "Delete the run \"" + name + "\" and all of its files? This cannot be undone."
   )) return;
+  setRunsError("");
   try {
     await postJSON("/api/runs/" + encodeURIComponent(runId) + "/delete", {});
     await loadRuns();
     flashBanner("Deleted run \"" + name + "\".", "ok", 3000);
   } catch (e) {
-    setBanner(e.message, "error");
+    setRunsError(e.message);
   }
 }
 
 function refreshActiveRun() {
   if (!runsState.active) {
-    setBanner("Load a run before refreshing its search.", "error");
+    setRunsError("Load a run before refreshing its search.");
     return;
   }
   doSearch({ merge: true });
@@ -1345,7 +1362,7 @@ function applyOrGroupToNode(node, suggestions) {
   if (!suggestions || !suggestions.length) return;
   const group = queryModel.wrapNodes([node], node.op || "AND");
   if (!group) {
-    setBanner("Could not wrap this term into a group.", "error");
+    setSearchError("Could not wrap this term into a group.");
     return;
   }
   suggestions.forEach(s => queryModel.addTerm(group, s, "OR"));
@@ -1769,12 +1786,12 @@ function ensureAtLeastOneTerm() {
 function wrapSelected() {
   const nodes = collectSelectedTopLevel();
   if (!nodes.length) {
-    setBanner("Select at least one row or group to wrap.", "error");
+    setSearchError("Select at least one row or group to wrap.");
     return;
   }
   const group = queryModel.wrapNodes(nodes, "AND");
   if (!group) {
-    setBanner("Selected items must share the same parent group.", "error");
+    setSearchError("Selected items must share the same parent group.");
     return;
   }
   setBanner("");
@@ -1791,6 +1808,7 @@ async function doSearch(options) {
   const opts = options || {};
   const merge = !!opts.merge;
   setBanner("");
+  setSearchError("");
   const query = buildQuery();
   const sources = [...document.querySelectorAll("#source-list input:checked")].map(c => c.value);
   const maxResults = parseInt(document.getElementById("max-results").value, 10) || 50;
@@ -1798,21 +1816,28 @@ async function doSearch(options) {
   const localFolder = document.getElementById("local-folder").value.trim();
   const localRecursive = document.getElementById("local-recursive").checked;
   const localOnly = !!localFolder && !query && !sources.length;
-  if (years.error) { setBanner(years.error, "error"); return; }
+  if (years.error) { setSearchError(years.error); return; }
   if (localFolder) {
     // With a folder, an empty query + no websites means folder-only. Mixing
     // one without the other is ambiguous, so say exactly what to fix.
     if (query && !sources.length) {
-      setBanner("Choose at least one website, or clear the search terms for a folder-only search.", "error");
+      setSearchError(
+        "Search terms are still set, so a website is needed. Clear the search terms above "
+        + "(the query preview should say “(empty query)”) to use only your local PDF "
+        + "folder, or tick at least one website."
+      );
       return;
     }
     if (!query && sources.length) {
-      setBanner("Enter at least one search term, or deselect every website for a folder-only search.", "error");
+      setSearchError(
+        "Websites are ticked but there are no search terms. Untick every website to use "
+        + "only your local PDF folder, or add at least one search term."
+      );
       return;
     }
   } else {
-    if (!query) { setBanner("Enter at least one search term.", "error"); return; }
-    if (!sources.length) { setBanner("Choose at least one website.", "error"); return; }
+    if (!query) { setSearchError("Enter at least one search term."); return; }
+    if (!sources.length) { setSearchError("Choose at least one website."); return; }
   }
 
   try {
@@ -1834,7 +1859,7 @@ async function doSearch(options) {
     showProgress(true);
     pollJob(job_id);
   } catch (e) {
-    setBanner(e.message, "error");
+    setSearchError(e.message);
   }
 }
 
@@ -1870,6 +1895,7 @@ function parseColumnInput(value) {
 }
 
 async function doExtract() {
+  setBanner("");
   setExtractError("");
   const goal = document.getElementById("goal").value.trim();
   const parsed = parseColumnInput(document.getElementById("columns").value);
@@ -2016,7 +2042,10 @@ function pollJob(jobId) {
         setBusy(false);
         showProgress(false);
         await loadRuns();
-        setBanner("Error: " + (job.error || "something went wrong"), "error");
+        setSectionError(
+          job.type === "extract" ? "extract-error" : "search-error",
+          "Error: " + (job.error || "something went wrong")
+        );
       }
     } catch (e) {
       clearInterval(pollTimer);
