@@ -3,6 +3,7 @@
 import contextlib
 import io
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -264,6 +265,27 @@ class ScanFolderTests(LocalPdfTestBase):
 
         self.assertEqual(first[0]["local_pdf"], second[0]["local_pdf"])
         self.assertEqual(first[0]["local_pdf_path"], second[0]["local_pdf_path"])
+
+    def test_very_long_file_names_are_scanned(self):
+        # Windows refuses stat/open past MAX_PATH (260 chars) without the
+        # \\?\ prefix, and Path.is_file() then drops the file silently.
+        deep = self.source / ("a" * 120) / ("b" * 120)
+        os.makedirs(local_pdfs._os_path(deep))
+        target = deep / "long name paper.pdf"
+        make_pdf(local_pdfs._os_path(target), title="Long Name Paper")
+        self.assertGreater(len(str(target)), 260)
+        try:
+            papers, stats = local_pdfs.scan_folder(self.source, recursive=True)
+        finally:
+            # TemporaryDirectory.cleanup() cannot remove names past MAX_PATH.
+            os.remove(local_pdfs._os_path(target))
+            os.rmdir(local_pdfs._os_path(target.parent))
+            os.rmdir(local_pdfs._os_path(target.parent.parent))
+
+        self.assertEqual([p["title"] for p in papers], ["Long Name Paper"])
+        self.assertEqual(stats["found"], 1)
+        self.assertEqual(stats["errors"], 0)
+        self.assertTrue(Path(papers[0]["local_pdf_path"]).is_file())
 
     def test_local_duplicates_by_doi_are_collapsed(self):
         make_pdf(self.source / "one.pdf", title="First", doi="10.1000/SAME")

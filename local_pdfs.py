@@ -144,19 +144,59 @@ def _is_under(path, parent):
         return False
 
 
+def _os_path(path):
+    """Return an OS path that works past Windows' 260-character MAX_PATH.
+
+    ``os.scandir`` already lists files whose full path is longer than MAX_PATH,
+    but every later ``open``/``link``/``stat`` needs the extended-length
+    ``\\\\?\\`` prefix (or ``\\\\?\\UNC\\`` for network shares) to touch them.
+    Other platforms get the plain string.
+    """
+    raw = os.fspath(path)
+    if os.name != "nt":
+        return raw
+    if raw.startswith("\\\\?\\"):
+        return raw
+    if not os.path.isabs(raw):
+        raw = os.path.abspath(raw)
+    if len(raw) < 260:
+        return raw
+    if raw.startswith("\\\\"):
+        return "\\\\?\\UNC\\" + raw[2:]
+    return "\\\\?\\" + raw
+
+
 def _iter_pdf_paths(folder, recursive):
-    iterator = folder.rglob("*") if recursive else folder.iterdir()
-    paths = [
-        path
-        for path in iterator
-        if path.is_file() and path.suffix.casefold() == PDF_SUFFIX
-    ]
+    # Path.is_file() calls stat(), which fails for names longer than MAX_PATH
+    # on Windows and silently drops them. DirEntry.is_file() uses the cached
+    # directory-scan metadata instead, so long names are still listed.
+    paths = []
+
+    def collect(directory):
+        try:
+            entries = os.scandir(_os_path(directory))
+        except OSError:
+            return
+        with entries:
+            for entry in entries:
+                try:
+                    if entry.is_dir(follow_symlinks=False):
+                        if recursive:
+                            collect(entry.path)
+                        continue
+                    is_file = entry.is_file()
+                except OSError:
+                    is_file = False
+                if is_file and Path(entry.name).suffix.casefold() == PDF_SUFFIX:
+                    paths.append(Path(entry.path))
+
+    collect(folder)
     return sorted(paths, key=lambda p: str(p).casefold())
 
 
 def _has_pdf_magic(path):
     try:
-        with open(path, "rb") as handle:
+        with open(_os_path(path), "rb") as handle:
             return handle.read(1024).lstrip().startswith(PDF_MAGIC)
     except OSError:
         return False
@@ -202,7 +242,7 @@ def _read_pdf_metadata(path):
     keeps scanning.
     """
     source = Path(path)
-    reader = PdfReader(str(source))
+    reader = PdfReader(_os_path(source))
     if getattr(reader, "is_encrypted", False):
         # pypdf can open encrypted files only after decrypting (even an empty
         # password). If that is not possible, treat the file as an error.
@@ -258,7 +298,11 @@ def _doi_from_text(text):
 
 def _archive_filename(source):
     """Deterministic, collision-safe archived name for one source path."""
-    raw = str(Path(source).expanduser().resolve())
+    try:
+        raw = str(Path(source).expanduser().resolve())
+    except OSError:
+        # resolve() needs to stat the path; long Windows names fail it.
+        raw = os.path.abspath(os.fspath(source))
     digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:INDEX_FILENAME_DIGEST]
     return f"local_{digest}_{_safe_stem(Path(source).stem)}.pdf"
 
@@ -281,10 +325,10 @@ def _archive_pdf(source, dest_dir):
         if temp.exists():
             temp.unlink()
         try:
-            os.link(source, temp)
+            os.link(_os_path(source), temp)
         except OSError:
             mode = "copied"
-            shutil.copy2(source, temp)
+            shutil.copy2(_os_path(source), temp)
         os.replace(temp, dest)
     finally:
         try:

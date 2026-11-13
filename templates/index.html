@@ -43,6 +43,7 @@
         <button class="ghost-btn danger" id="run-delete" type="button"
                 onclick="deleteSelectedRun()" disabled>Delete run</button>
       </div>
+      <p id="runs-error" class="field-error hidden" role="alert"></p>
       <p class="hint run-hint">Load an old run, then use <strong>Refresh search</strong> to merge
         new results into it. A normal Search always starts a new run. The active run cannot
         be deleted until you load another one.</p>
@@ -132,6 +133,7 @@
         replaces that folder's dataset. To add new results to an existing run, load it in
         <strong>Runs</strong> above and click <strong>Refresh search</strong>.</p>
       <button class="primary-btn" id="search-btn" onclick="doSearch()">Search papers</button>
+      <p id="search-error" class="field-error hidden" role="alert"></p>
     </section>
 
     <!-- 2. Extract -->
@@ -174,6 +176,7 @@
       </div>
       <input type="text" id="columns" placeholder="e.g. mutation, effect, position">
       <p class="hint">Paper key, row number, evidence/page and PDF columns are added automatically; those names are reserved.</p>
+      <p id="columns-warning" class="field-warning hidden" role="status"></p>
 
       <label class="field-label" for="extraction-mode">Extraction mode</label>
       <select id="extraction-mode">
@@ -184,6 +187,7 @@
         table row kept separate. Individual records is the safer default for prose and mixed papers.</p>
 
       <button class="primary-btn" id="extract-btn" onclick="doExtract()">Extract data</button>
+      <p id="extract-error" class="field-error hidden" role="alert"></p>
     </section>
 
     <!-- Progress -->
@@ -313,6 +317,7 @@
         </div>
       </div>
       <button class="ghost-btn" onclick="saveSettings()">Save settings</button>
+      <p id="settings-error" class="field-error hidden" role="alert"></p>
     </details>
   </main>
 

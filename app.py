@@ -16,6 +16,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 import uuid
 import webbrowser
 from pathlib import Path
@@ -124,6 +125,18 @@ def save_settings(s):
     SETTINGS_PATH.write_text(json.dumps(s, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def _settings_payload(s):
+    """Settings plus the default extraction columns (read-only metadata).
+
+    The UI shows these names when the user leaves the column field empty, so a
+    no-columns run is never a surprise. They are not persisted to the settings
+    file — `config.FIELDS` stays the single source of truth.
+    """
+    payload = dict(s)
+    payload["default_columns"] = [str(field[0]) for field in config.FIELDS]
+    return payload
+
+
 def apply_settings(s):
     config.NCBI_EMAIL = s.get("email") or config.NCBI_EMAIL
     config.OLLAMA_MODEL = s.get("model") or config.OLLAMA_MODEL
@@ -158,6 +171,7 @@ def _new_job(job_type):
         "status": "running",
         "error": None,
         "progress": {"done": 0, "total": 0, "current": ""},
+        "started_at": time.time(),
         "log": [],
         "result": None,
         "cancel_requested": False,
@@ -191,6 +205,7 @@ def _job_public(job):
         "status": job["status"],
         "error": job["error"],
         "progress": job["progress"],
+        "started_at": job.get("started_at"),
         "log": job["log"][-40:],
         "result": job["result"],
         "cancel_requested": bool(job.get("cancel_requested", False)),
@@ -802,7 +817,8 @@ def _run_extract_job(job, goal, columns, mode="records"):
             todo.append(p)
 
         job["progress"]["total"] = len(todo)
-        job["log"].append(f"{len(todo)} paper(s) to process (already-done skipped).")
+        skipped_done = max(len(seen) - len(todo), 0)
+        job["log"].append(f"{len(todo)} paper(s) to process ({skipped_done} already done, skipped).")
 
         n_extracted = n_closed = 0
         n_evidence_located = n_evidence_unresolved = 0
@@ -963,6 +979,7 @@ def _run_extract_job(job, goal, columns, mode="records"):
             "extracted": n_extracted,
             "closed": n_closed,
             "papers_processed": processed if cancelled else len(todo),
+            "skipped": skipped_done,
             "mode": mode,
             "evidence_located": n_evidence_located,
             "evidence_unresolved": n_evidence_unresolved,
@@ -1151,8 +1168,8 @@ def api_settings():
             s["local_recursive"] = _as_bool(data["local_recursive"])
         save_settings(s)
         apply_settings(s)
-        return jsonify(s)
-    return jsonify(load_settings())
+        return jsonify(_settings_payload(s))
+    return jsonify(_settings_payload(load_settings()))
 
 
 @app.route("/api/history")

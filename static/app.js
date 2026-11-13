@@ -26,16 +26,63 @@ function norm(text) {
   return (text || "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
-function setBanner(msg, type) {
+function setBanner(msg, type, action) {
   const b = document.getElementById("banner");
-  if (!msg) { b.classList.add("hidden"); b.textContent = ""; return; }
-  b.textContent = msg;
+  b.textContent = "";
+  if (!msg) {
+    b.classList.add("hidden");
+    return;
+  }
   b.className = "banner " + (type || "info");
+  b.append(document.createTextNode(msg));
+  if (action && action.label) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ghost-btn mini banner-action";
+    btn.textContent = action.label;
+    btn.onclick = action.onClick;
+    b.append(btn);
+  }
+  // The banner lives at the very top, so a user scrolled down to Search or
+  // Extract would never see it. Bring it into view for errors and for
+  // completion messages that carry a "View results" button.
+  if (type === "error" || action) {
+    b.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
 }
+
+// Errors belong under the button the user just clicked: the shared #banner
+// sits at the top of the page and is off-screen while the user works further
+// down. Every form section has its own inline error line.
+function setSectionError(id, msg) {
+  const el = document.getElementById(id);
+  if (!el) {
+    // Fail safe: an older page without the inline element still reports.
+    setBanner(msg || "", msg ? "error" : "");
+    return;
+  }
+  if (!msg) {
+    el.textContent = "";
+    el.classList.add("hidden");
+    return;
+  }
+  el.textContent = msg;
+  el.classList.remove("hidden");
+  el.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+
+function setSearchError(msg) { setSectionError("search-error", msg); }
+function setExtractError(msg) { setSectionError("extract-error", msg); }
+function setSettingsError(msg) { setSectionError("settings-error", msg); }
+function setRunsError(msg) { setSectionError("runs-error", msg); }
 
 function setBusy(running) {
   document.getElementById("search-btn").disabled = running;
   document.getElementById("extract-btn").disabled = running;
+  if (!running) {
+    const extractBtn = document.getElementById("extract-btn");
+    if (extractBtn) extractBtn.textContent = "Extract data";
+  }
   ["run-load", "run-refresh", "run-delete"].forEach(id => {
     const btn = document.getElementById(id);
     if (btn) btn.disabled = running;
@@ -126,8 +173,13 @@ function formatYearRange(from, to) {
   return "";
 }
 
+// Default extraction columns, sent by /api/settings. Shown in the empty-columns
+// warning so an accidental no-columns run is never a surprise.
+let defaultColumns = [];
+
 async function loadSettings() {
   const s = await getJSON("/api/settings");
+  defaultColumns = Array.isArray(s.default_columns) ? s.default_columns : [];
   document.getElementById("set-email").value = s.email || "";
   document.getElementById("set-model").value = s.model || "";
   document.getElementById("set-max").value = s.max_results || 50;
@@ -139,11 +191,36 @@ async function loadSettings() {
   const journals = s.excluded_journals;
   document.getElementById("excluded-journals").value =
     Array.isArray(journals) ? journals.join("\n") : (journals || "");
+  updateColumnsWarning();
+}
+
+// Shows the default field names whenever the columns box is empty. This is a
+// warning, not a blocker: an empty box still runs with config.FIELDS, and the
+// user should see exactly which columns that means before clicking Extract.
+function updateColumnsWarning() {
+  const el = document.getElementById("columns-warning");
+  if (!el) return;
+  const parsed = parseColumnInput(document.getElementById("columns").value);
+  // Invalid names (duplicates/reserved) are reported as an error on Extract;
+  // the default-columns warning would only muddle that message.
+  if (parsed.columns.length || parsed.errors.length) {
+    el.textContent = "";
+    el.classList.add("hidden");
+    return;
+  }
+  const names = defaultColumns.length
+    ? defaultColumns.join(", ")
+    : "the app's configured fields";
+  el.textContent =
+    `No column names given — the default columns will be used: ${names}. ` +
+    `Type your own columns above to control the spreadsheet.`;
+  el.classList.remove("hidden");
 }
 
 async function saveSettings() {
   const years = readYearRange();
-  if (years.error) { setBanner(years.error, "error"); return; }
+  setSettingsError("");
+  if (years.error) { setSettingsError(years.error); return; }
   try {
     const body = {
       email: document.getElementById("set-email").value.trim(),
@@ -161,7 +238,7 @@ async function saveSettings() {
     setTimeout(() => setBanner(""), 2000);
     checkStatus();
   } catch (e) {
-    setBanner(e.message, "error");
+    setSettingsError(e.message);
   }
 }
 
@@ -323,7 +400,7 @@ async function clearPromptHistory(kind) {
       2500
     );
   } catch (e) {
-    setBanner(e.message, "error");
+    setSectionError(kind === "search" ? "search-error" : "extract-error", e.message);
   }
 }
 
@@ -469,6 +546,7 @@ async function loadSelectedRun() {
   const select = document.getElementById("run-select");
   const runId = select ? select.value : "";
   if (!runId) return;
+  setRunsError("");
   try {
     const data = await postJSON(
       "/api/runs/" + encodeURIComponent(runId) + "/load",
@@ -478,7 +556,7 @@ async function loadSelectedRun() {
     await loadResults();
     await loadRuns();
   } catch (e) {
-    setBanner(e.message, "error");
+    setRunsError(e.message);
   }
 }
 
@@ -491,18 +569,19 @@ async function deleteSelectedRun() {
   if (!window.confirm(
     "Delete the run \"" + name + "\" and all of its files? This cannot be undone."
   )) return;
+  setRunsError("");
   try {
     await postJSON("/api/runs/" + encodeURIComponent(runId) + "/delete", {});
     await loadRuns();
     flashBanner("Deleted run \"" + name + "\".", "ok", 3000);
   } catch (e) {
-    setBanner(e.message, "error");
+    setRunsError(e.message);
   }
 }
 
 function refreshActiveRun() {
   if (!runsState.active) {
-    setBanner("Load a run before refreshing its search.", "error");
+    setRunsError("Load a run before refreshing its search.");
     return;
   }
   doSearch({ merge: true });
@@ -569,6 +648,8 @@ function applyRunState(state) {
     : {};
   if (settings.email) setFieldValue("set-email", settings.email);
   if (settings.model) setFieldValue("set-model", settings.model);
+
+  updateColumnsWarning();
 
   const name = state.name || state.id || "run";
   const date = runTimestamp(state.updated_at || state.created_at);
@@ -1281,7 +1362,7 @@ function applyOrGroupToNode(node, suggestions) {
   if (!suggestions || !suggestions.length) return;
   const group = queryModel.wrapNodes([node], node.op || "AND");
   if (!group) {
-    setBanner("Could not wrap this term into a group.", "error");
+    setSearchError("Could not wrap this term into a group.");
     return;
   }
   suggestions.forEach(s => queryModel.addTerm(group, s, "OR"));
@@ -1705,12 +1786,12 @@ function ensureAtLeastOneTerm() {
 function wrapSelected() {
   const nodes = collectSelectedTopLevel();
   if (!nodes.length) {
-    setBanner("Select at least one row or group to wrap.", "error");
+    setSearchError("Select at least one row or group to wrap.");
     return;
   }
   const group = queryModel.wrapNodes(nodes, "AND");
   if (!group) {
-    setBanner("Selected items must share the same parent group.", "error");
+    setSearchError("Selected items must share the same parent group.");
     return;
   }
   setBanner("");
@@ -1727,6 +1808,7 @@ async function doSearch(options) {
   const opts = options || {};
   const merge = !!opts.merge;
   setBanner("");
+  setSearchError("");
   const query = buildQuery();
   const sources = [...document.querySelectorAll("#source-list input:checked")].map(c => c.value);
   const maxResults = parseInt(document.getElementById("max-results").value, 10) || 50;
@@ -1734,21 +1816,28 @@ async function doSearch(options) {
   const localFolder = document.getElementById("local-folder").value.trim();
   const localRecursive = document.getElementById("local-recursive").checked;
   const localOnly = !!localFolder && !query && !sources.length;
-  if (years.error) { setBanner(years.error, "error"); return; }
+  if (years.error) { setSearchError(years.error); return; }
   if (localFolder) {
     // With a folder, an empty query + no websites means folder-only. Mixing
     // one without the other is ambiguous, so say exactly what to fix.
     if (query && !sources.length) {
-      setBanner("Choose at least one website, or clear the search terms for a folder-only search.", "error");
+      setSearchError(
+        "Search terms are still set, so a website is needed. Clear the search terms above "
+        + "(the query preview should say “(empty query)”) to use only your local PDF "
+        + "folder, or tick at least one website."
+      );
       return;
     }
     if (!query && sources.length) {
-      setBanner("Enter at least one search term, or deselect every website for a folder-only search.", "error");
+      setSearchError(
+        "Websites are ticked but there are no search terms. Untick every website to use "
+        + "only your local PDF folder, or add at least one search term."
+      );
       return;
     }
   } else {
-    if (!query) { setBanner("Enter at least one search term.", "error"); return; }
-    if (!sources.length) { setBanner("Choose at least one website.", "error"); return; }
+    if (!query) { setSearchError("Enter at least one search term."); return; }
+    if (!sources.length) { setSearchError("Choose at least one website."); return; }
   }
 
   try {
@@ -1770,7 +1859,7 @@ async function doSearch(options) {
     showProgress(true);
     pollJob(job_id);
   } catch (e) {
-    setBanner(e.message, "error");
+    setSearchError(e.message);
   }
 }
 
@@ -1807,11 +1896,22 @@ function parseColumnInput(value) {
 
 async function doExtract() {
   setBanner("");
+  setExtractError("");
   const goal = document.getElementById("goal").value.trim();
   const parsed = parseColumnInput(document.getElementById("columns").value);
-  if (parsed.errors.length) { setBanner(parsed.errors.join(" "), "error"); return; }
+  if (parsed.errors.length) { setExtractError(parsed.errors.join(" ")); return; }
+  if (!goal) { setExtractError("Describe what data you want to extract."); return; }
   const mode = document.getElementById("extraction-mode").value || "records";
-  if (!goal) { setBanner("Describe what data you want to extract.", "error"); return; }
+
+  // Acknowledge the click immediately: validation and the POST take a moment,
+  // and a silent wait looks like a dead button.
+  const btn = document.getElementById("extract-btn");
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Starting…";
+  showProgress(true);
+  document.getElementById("progress-status").textContent = "Starting extraction…";
+  document.getElementById("progress-bar").classList.add("indeterminate");
 
   try {
     const { job_id } = await postJSON("/api/extract", {
@@ -1820,10 +1920,12 @@ async function doExtract() {
       mode,
     });
     setBusy(true);
-    showProgress(true);
     pollJob(job_id);
   } catch (e) {
-    setBanner(e.message, "error");
+    btn.disabled = false;
+    btn.textContent = label;
+    showProgress(false);
+    setExtractError(e.message);
   }
 }
 
@@ -1831,6 +1933,13 @@ async function doExtract() {
 
 function showProgress(show) {
   document.getElementById("progress-card").classList.toggle("hidden", !show);
+}
+
+// Jump from a completion banner straight to the results tables.
+function showResultsTab(name) {
+  setResultsTab(name || "data", true);
+  const card = document.getElementById("results-card");
+  if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function pollJob(jobId) {
@@ -1866,19 +1975,45 @@ function pollJob(jobId) {
             setBanner(
               `Refresh finished${runSuffix}: ${job.result.total} papers ` +
                 `(${added} new${suffix}${rangeSuffix}${localSuffix}); extraction data kept.`,
-              "ok"
+              "ok",
+              { label: "View results", onClick: () => showResultsTab("search") }
             );
           } else {
             setBanner(
               `Search finished${runSuffix}: ${job.result.total} papers` +
                 `${rangeSuffix}${suffix}${localSuffix}.`,
-              "ok"
+              "ok",
+              { label: "View results", onClick: () => showResultsTab("search") }
             );
           }
         } else if (job.result && job.result.extracted !== undefined) {
           await Promise.all([refreshHistory("goal"), refreshHistory("columns")]);
           const modeLabel = job.result.mode === "table" ? "table rows" : "individual records";
-          setBanner(`Extraction finished (${modeLabel}): ${job.result.extracted} row(s) extracted, ${job.result.closed} paper(s) closed.`, "ok");
+          const processed = job.result.papers_processed ?? 0;
+          const skipped = job.result.skipped ?? 0;
+          const viewResults = { label: "View results", onClick: () => showResultsTab("data") };
+          if (job.result.extracted) {
+            setBanner(
+              `Extraction finished (${modeLabel}): ${job.result.extracted} row(s) from ` +
+                `${processed} paper(s), ${job.result.closed} closed source(s).`,
+              "ok",
+              viewResults
+            );
+          } else if (!processed && skipped) {
+            setBanner(
+              `Extraction finished: all ${skipped} paper(s) were already processed in an ` +
+                `earlier run, so nothing new was done. Previous rows are still in ` +
+                `extracted_data.xlsx.`,
+              "info"
+            );
+          } else {
+            setBanner(
+              `Extraction finished: no rows matched the goal across ${processed} paper(s) ` +
+                `(${job.result.closed} closed source(s)). Try a clearer goal, or check the closed sources.`,
+              "info",
+              viewResults
+            );
+          }
         }
       } else if (job.status === "cancelled") {
         clearInterval(pollTimer);
@@ -1907,7 +2042,10 @@ function pollJob(jobId) {
         setBusy(false);
         showProgress(false);
         await loadRuns();
-        setBanner("Error: " + (job.error || "something went wrong"), "error");
+        setSectionError(
+          job.type === "extract" ? "extract-error" : "search-error",
+          "Error: " + (job.error || "something went wrong")
+        );
       }
     } catch (e) {
       clearInterval(pollTimer);
@@ -1950,19 +2088,55 @@ async function cancelJob() {
   }
 }
 
+function formatDuration(totalSeconds) {
+  const s = Math.max(0, Math.round(totalSeconds));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  if (m < 60) return rem ? `${m}m ${rem}s` : `${m}m`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+// Elapsed/ETA come from the server's job start time, so they stay correct even
+// if the first poll arrives late. ETA needs at least one finished item to
+// estimate a per-item cost; before that only elapsed time is shown.
+function jobTiming(job, p) {
+  const started = Number(job.started_at);
+  if (!started) return "";
+  const elapsed = Math.max(0, Date.now() / 1000 - started);
+  let text = `${formatDuration(elapsed)} elapsed`;
+  if (p.total > 0 && p.done > 0) {
+    const remaining = (elapsed / p.done) * (p.total - p.done);
+    text += ` · ~${formatDuration(remaining)} left`;
+  }
+  return text;
+}
+
 function renderProgress(job) {
   const p = job.progress || { done: 0, total: 0, current: "" };
+  // `done` counts finished items; while one is in flight, count it too so the
+  // user reads "3 / 35 papers" during the third paper, not "2 / 35".
+  const shown = Math.min(p.done + (p.current ? 1 : 0), p.total || 0);
   const bar = document.getElementById("progress-bar");
   if (p.total > 0) {
     bar.classList.remove("indeterminate");
-    bar.style.width = Math.round((p.done / p.total) * 100) + "%";
+    bar.style.width = Math.round((shown / p.total) * 100) + "%";
   } else {
     bar.classList.add("indeterminate");
     bar.style.width = "40%";
   }
   const status = document.getElementById("progress-status");
-  if (p.total > 0) status.textContent = `${p.done} / ${p.total} — ${p.current || ""}`;
-  else status.textContent = p.current || "Working…";
+  if (p.total > 0) {
+    const pct = Math.round((shown / p.total) * 100);
+    const unit = job.type === "extract" ? "papers" : "steps";
+    const timing = jobTiming(job, p);
+    const label = p.current
+      ? `${shown} / ${p.total} ${unit} — ${p.current} (${pct}% done)`
+      : `${p.done} / ${p.total} ${unit} (${pct}% done)`;
+    status.textContent = timing ? `${label} · ${timing}` : label;
+  } else {
+    status.textContent = p.current || "Working…";
+  }
   const cancelBtn = document.getElementById("cancel-job");
   if (cancelBtn) {
     const running = job.status === "running";
@@ -2816,6 +2990,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   setupFigureModal();
   const runSelect = document.getElementById("run-select");
   if (runSelect) runSelect.addEventListener("change", updateRunButtons);
+  const columnsInput = document.getElementById("columns");
+  if (columnsInput) columnsInput.addEventListener("input", updateColumnsWarning);
   queryModel.addTerm(queryModel.root);
   queryModel.addTerm(queryModel.root);
   renderQuery();

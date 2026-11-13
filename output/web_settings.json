@@ -1,0 +1,10 @@
+{
+  "email": "you@uni.de",
+  "model": "qwen2.5:7b-instruct",
+  "max_results": 50,
+  "excluded_journals": [],
+  "year_from": null,
+  "year_to": null,
+  "local_folder": "",
+  "local_recursive": false
+}
