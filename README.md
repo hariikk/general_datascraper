@@ -361,8 +361,9 @@ YEAR_TO = 2024
 Omit an option (or leave the config value as `None`) for an open end. The web
 app saves the years with its other settings, so they come back next time;
 clicking **Search papers** also saves an explicitly supplied range. Years saved
-in the web app override `config.py` while the app is running, just like the
-email and model settings.
+in the web app override `config.py` while the app is running, as do the email
+and other editable settings. The Ollama model is read only from `config.py`
+and is not overridden by saved web settings.
 
 How each website applies it:
 
@@ -460,6 +461,8 @@ MAX_LOCAL_PDFS = 500
 
 The web app saves the folder and the subfolder choice with its other settings
 (`output/web_settings.json`); those values override `config.py` while it runs.
+The Ollama model is an exception: set it in `config.py`, where the Settings
+panel displays it as read-only.
 The folder is only checked when you click **Search papers**, not when you save
 settings, and no public route serves files from your filesystem.
 
@@ -494,8 +497,8 @@ quoted by the same rule as the rest of the builder. The autocomplete dropdown
 only completes the term you are typing — it does not create OR groups.
 
 **Privacy:** autocomplete sends the typed text to NCBI/PubMed. LLM suggestions
-send the affected search term(s) to the LLM backend configured in `config.py`
-(or the Settings panel) — a local Ollama model keeps this on your machine, while
+send the affected search term(s) to the LLM backend configured in `config.py` —
+a local Ollama model keeps this on your machine, while
 an OpenAI-compatible endpoint sends them to that provider. Nothing else is sent,
 and neither feature changes the search or extraction pipeline.
 

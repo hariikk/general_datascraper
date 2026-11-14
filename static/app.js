@@ -224,7 +224,6 @@ async function saveSettings() {
   try {
     const body = {
       email: document.getElementById("set-email").value.trim(),
-      model: document.getElementById("set-model").value.trim(),
       max_results: parseInt(document.getElementById("set-max").value, 10) || 50,
       excluded_journals: document.getElementById("excluded-journals").value,
       year_from: years.year_from,
@@ -641,13 +640,12 @@ function applyRunState(state) {
     if (modeSelect) modeSelect.value = extraction.mode === "table" ? "table" : "records";
   }
 
-  // Email/model are non-secret app settings only. They are restored into the
-  // Settings fields for this view but are NOT saved automatically.
+  // Saved runs can restore the email field, but the model is configured only
+  // in config.py and must not be changed by loading a run.
   const settings = (state.settings && typeof state.settings === "object")
     ? state.settings
     : {};
   if (settings.email) setFieldValue("set-email", settings.email);
-  if (settings.model) setFieldValue("set-model", settings.model);
 
   updateColumnsWarning();
 

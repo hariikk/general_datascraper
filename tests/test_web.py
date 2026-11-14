@@ -546,6 +546,27 @@ class SettingsApiLocalTests(unittest.TestCase):
         self.assertEqual(fetched["local_folder"], "/configured/path")
         self.assertTrue(fetched["local_recursive"])
 
+    def test_legacy_saved_model_does_not_override_config(self):
+        self.settings_path.write_text(
+            json.dumps({"model": "old-saved-model"}), encoding="utf-8"
+        )
+        with mock.patch.object(web, "SETTINGS_PATH", self.settings_path), \
+             mock.patch.object(web.config, "OLLAMA_MODEL", "configured-model"):
+            loaded = web.load_settings()
+            web.apply_settings(loaded)
+
+            self.assertEqual(loaded["model"], "configured-model")
+            self.assertEqual(web.config.OLLAMA_MODEL, "configured-model")
+
+    def test_posted_model_is_not_persisted(self):
+        with mock.patch.object(web.config, "OLLAMA_MODEL", "configured-model"):
+            response = self._request("POST", {"model": "posted-model"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["model"], "configured-model")
+        saved = json.loads(self.settings_path.read_text(encoding="utf-8"))
+        self.assertNotIn("model", saved)
+
 
 class SettingsApiJournalTests(unittest.TestCase):
     def setUp(self):

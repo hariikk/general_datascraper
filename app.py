@@ -59,7 +59,7 @@ from main import (
 app = Flask(__name__)
 
 # --------------------------------------------------------------------------
-# Settings (persisted server-side so users don't retype email/model each time)
+# Settings (persisted server-side so users don't retype app preferences each time)
 # --------------------------------------------------------------------------
 
 SETTINGS_PATH = config.OUTPUT_DIR / "web_settings.json"
@@ -100,7 +100,9 @@ def load_settings():
         try:
             data = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
             d = _default_settings()
-            d.update({k: v for k, v in data.items() if k in d})
+            d.update({
+                k: v for k, v in data.items() if k in d and k != "model"
+            })
             d["excluded_journals"] = filters.parse_journal_terms(
                 d.get("excluded_journals")
             )
@@ -122,7 +124,11 @@ def load_settings():
 
 
 def save_settings(s):
-    SETTINGS_PATH.write_text(json.dumps(s, indent=2, ensure_ascii=False), encoding="utf-8")
+    persisted = dict(s)
+    persisted.pop("model", None)
+    SETTINGS_PATH.write_text(
+        json.dumps(persisted, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
 
 def _settings_payload(s):
@@ -139,7 +145,6 @@ def _settings_payload(s):
 
 def apply_settings(s):
     config.NCBI_EMAIL = s.get("email") or config.NCBI_EMAIL
-    config.OLLAMA_MODEL = s.get("model") or config.OLLAMA_MODEL
     config.HTTP_HEADERS = {"User-Agent": f"general-datascraper/1.0 (mailto:{config.NCBI_EMAIL})"}
     if "year_from" in s or "year_to" in s:
         try:
@@ -1138,8 +1143,6 @@ def api_settings():
         data = request.get_json(force=True, silent=True) or {}
         if data.get("email") is not None:
             s["email"] = str(data["email"]).strip()
-        if data.get("model") is not None:
-            s["model"] = str(data["model"]).strip()
         if data.get("max_results") is not None:
             try:
                 s["max_results"] = int(data["max_results"])

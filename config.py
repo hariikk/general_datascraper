@@ -60,7 +60,7 @@ EXCLUDED_JOURNALS = []
 
 # NCBI policy REQUIRES an email for PubMed access. Use your real one.
 # (It is only used for contact / rate-limiting, not authentication.)
-NCBI_EMAIL = "you@uni.de"
+NCBI_EMAIL = "karl.kirschner@h-brs.de"
 
 # Optional: an NCBI API key raises your PubMed rate limit (free at
 # https://www.ncbi.nlm.nih.gov/account/). Leave "" if you don't have one.
@@ -80,7 +80,7 @@ LLM_BACKEND = "ollama"
 
 # --- Ollama (local) ---
 OLLAMA_URL   = "http://localhost:11434"     # default Ollama port
-OLLAMA_MODEL = "qwen2.5:7b-instruct"        # your model (see: ollama list)
+OLLAMA_MODEL = "llama3.2:3b"
 
 # --- OpenAI-compatible (e.g. KI connect NRW) ---
 # Set LLM_BACKEND = "openai" and fill these in. Your institution gives you a

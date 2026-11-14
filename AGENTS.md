@@ -45,9 +45,10 @@ No build step, package metadata, linter, or CI; unit tests live in `tests/`.
   `FIGURE_MAX_PER_PAPER`, `FIGURE_MAX_CANDIDATES`, `FIGURES_DIR`,
   `FIGURES_INDEX_JSON`, `FIGURES_XLSX`), prompt-history path/caps, output
   paths, Flask host/port. The web Settings panel persists
-  email/model/max-results/year range/local folder to
-  `output/web_settings.json`; those values **override `config.py` at app
-  startup**. `RUNS_ENABLED` (default `False`), `RUNS_DIR`
+  email/max-results/year range/local folder to `output/web_settings.json`;
+  those values override `config.py` at app startup. The Ollama model is always
+  read from `config.OLLAMA_MODEL` and is not persisted in web settings.
+  `RUNS_ENABLED` (default `False`), `RUNS_DIR`
   (`OUTPUT_DIR/"runs"`), `ACTIVE_RUN_JSON` and the runtime
   `ACTIVE_RUN_DIR = None` drive per-run folders.
 - `runs.py`: per-search-dataset folders + savable state. A run id must match
@@ -256,7 +257,8 @@ No build step, package metadata, linter, or CI; unit tests live in `tests/`.
   after sources/settings and applies the active state without auto-running.
   `doSearch({merge:true})` is Refresh search. `applyRunState()` restores query +
   checkbox paths, sources, max results, years, journals, local folder,
-  extraction goal/columns/mode and email/model fields (not saved automatically).
+  extraction goal/columns/mode and email (not saved automatically); the model
+  remains configured by `config.py` and is not restored from run state.
   `queryModel.pathForNode()`/`nodeAtPath()` use child-index paths;
   `restore(tree, {preserveEmpty:true})` keeps empty nodes for run restores while
   history keeps dropping them. `snapshotQuerySelection()` /
