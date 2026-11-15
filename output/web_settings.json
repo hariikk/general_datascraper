@@ -4,6 +4,6 @@
   "excluded_journals": [],
   "year_from": null,
   "year_to": null,
-  "local_folder": "",
+  "local_folder": "/home/karl/sciebo/manuscripts/membranes_pdfs",
   "local_recursive": false
 }

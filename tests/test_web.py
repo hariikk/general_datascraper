@@ -283,7 +283,9 @@ class SearchApiJournalTests(unittest.TestCase):
 
     def _post(self, payload):
         with mock.patch.object(web, "_start_job", new=self._fake_start), \
-             mock.patch.object(web, "SETTINGS_PATH", self.settings_path):
+             mock.patch.object(web, "SETTINGS_PATH", self.settings_path), \
+             mock.patch.object(web.config, "LOCAL_PDF_DIR", ""), \
+             mock.patch.object(web.config, "LOCAL_PDF_RECURSIVE", False):
             return self.client.post("/api/search", json=payload)
 
     def test_new_client_exclusions_are_parsed_forwarded_and_persisted(self):

@@ -505,7 +505,9 @@ class SearchApiYearRangeTests(unittest.TestCase):
              mock.patch.object(web, "SETTINGS_PATH", self.settings_path), \
              mock.patch.object(web.config, "EXCLUDED_JOURNALS", []), \
              mock.patch.object(web.config, "YEAR_FROM", None), \
-             mock.patch.object(web.config, "YEAR_TO", None):
+             mock.patch.object(web.config, "YEAR_TO", None), \
+             mock.patch.object(web.config, "LOCAL_PDF_DIR", ""), \
+             mock.patch.object(web.config, "LOCAL_PDF_RECURSIVE", False):
             return self.client.post("/api/search", json=payload)
 
     def test_string_and_numeric_years_are_forwarded_and_persisted(self):
