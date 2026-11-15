@@ -335,7 +335,7 @@ Things to know:
 ## Publication-year range
 
 The Search card has optional **From year** / **To year** boxes next to
-**Max results / site**. Leave either box blank for no limit on that side and use
+**Max results / website**. Leave either box blank for no limit on that side and use
 four-digit years (for example `2015`). A start year after the end year is
 rejected with a clear message.
 
@@ -390,15 +390,18 @@ which papers are available to the journal blocklist.
 
 ## Local PDF folder
 
-The Search card has an optional **Local PDF folder** box and an **Include
-subfolders** checkbox. Use it to work with PDFs you already have on your
+The Search card lists **Local PDFs** alongside the online websites. Select it
+to reveal the folder and **Include subfolders** controls. **Max results / website**
+applies independently to online sources; local PDFs are scanned independently
+of that limit. Use Local PDFs to work with files you already have on your
 computer:
 
 - **Combine with an online search** — type search terms, pick websites, and
-  choose a folder. Online results and local PDFs are merged into one dataset.
-- **Folder-only** — choose a folder, leave the search terms empty, and deselect
-  every website. ScrapeLite then skips the online search and works only on the
-  PDFs in that folder.
+  select Local PDFs and choose a folder. Online results and local PDFs are
+  merged into one dataset.
+- **Folder-only** — select Local PDFs and choose a folder, leave the search
+  terms empty, and deselect every website. ScrapeLite then skips the online
+  search and works only on the PDFs in that folder.
 
 Each usable PDF is copied (or hardlinked when possible) into `output/pdfs/`
 with a deterministic name of the form

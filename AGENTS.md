@@ -45,7 +45,8 @@ No build step, package metadata, linter, or CI; unit tests live in `tests/`.
   `FIGURE_MAX_PER_PAPER`, `FIGURE_MAX_CANDIDATES`, `FIGURES_DIR`,
   `FIGURES_INDEX_JSON`, `FIGURES_XLSX`), prompt-history path/caps, output
   paths, Flask host/port. The web Settings panel persists
-  email/max-results/year range/local folder to `output/web_settings.json`;
+  email/max-results/year range/local folder and whether Local PDFs is selected
+  to `output/web_settings.json`;
   those values override `config.py` at app startup. The Ollama model is always
   read from `config.OLLAMA_MODEL` and is not persisted in web settings.
   `RUNS_ENABLED` (default `False`), `RUNS_DIR`
@@ -357,11 +358,12 @@ No build step, package metadata, linter, or CI; unit tests live in `tests/`.
   updates `#goal`; Cancel/Dismiss leaves it unchanged. Keep the button/panel
   directly after `#goal` and before the column-name field, and keep the Previous
   goals history row above the textarea.
-- **Web folder-only search:** `/api/search` allows an empty query and no sources
-  only when a valid `local_folder` is supplied. Supplying a query without sources
-  (or sources without a query) is still a 400. Omitted `local_folder` /
-  `local_recursive` keys fall back to saved settings; an explicitly blank folder
-  disables local PDFs. Settings are validated only at search time.
+- **Web folder-only search:** `/api/search` allows an empty query and no online
+  sources only when Local PDFs is enabled and a valid `local_folder` is supplied.
+  Supplying a query without online sources (or online sources without a query)
+  is still a 400 unless Local PDFs is selected. Omitted local settings fall back
+  to saved settings; `local_enabled` controls whether the saved folder participates
+  without clearing its path. Settings are validated only at search time.
 - **Prompt history is global across workspaces/browser sessions and
   best-effort:** `app.py` records the normalized
   search payload (including the browser's `query_tree` plus sources, max results,

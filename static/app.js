@@ -138,10 +138,27 @@ async function loadSources() {
     cb.type = "checkbox";
     cb.value = s.name;
     cb.checked = true;
+    cb.dataset.onlineSource = "true";
     label.appendChild(cb);
     label.appendChild(document.createTextNode(s.label));
     list.appendChild(label);
   });
+
+  const localLabel = document.createElement("label");
+  const localCheckbox = document.createElement("input");
+  localCheckbox.type = "checkbox";
+  localCheckbox.id = "source-local-pdfs";
+  localCheckbox.value = "local_pdfs";
+  localCheckbox.addEventListener("change", updateLocalSourceOptions);
+  localLabel.appendChild(localCheckbox);
+  localLabel.appendChild(document.createTextNode("Local PDFs"));
+  list.appendChild(localLabel);
+}
+
+function updateLocalSourceOptions() {
+  const checkbox = document.getElementById("source-local-pdfs");
+  const options = document.getElementById("local-source-options");
+  if (checkbox && options) options.classList.toggle("hidden", !checkbox.checked);
 }
 
 /* ---------- settings ---------- */
@@ -188,6 +205,8 @@ async function loadSettings() {
   document.getElementById("year-to").value = s.year_to || "";
   document.getElementById("local-folder").value = s.local_folder || "";
   document.getElementById("local-recursive").checked = !!s.local_recursive;
+  document.getElementById("source-local-pdfs").checked = !!s.local_enabled;
+  updateLocalSourceOptions();
   const journals = s.excluded_journals;
   document.getElementById("excluded-journals").value =
     Array.isArray(journals) ? journals.join("\n") : (journals || "");
@@ -230,6 +249,7 @@ async function saveSettings() {
       year_to: years.year_to,
       local_folder: document.getElementById("local-folder").value.trim(),
       local_recursive: document.getElementById("local-recursive").checked,
+      local_enabled: document.getElementById("source-local-pdfs").checked,
     };
     await postJSON("/api/settings", body);
     document.getElementById("max-results").value = body.max_results;
@@ -357,16 +377,20 @@ function applySearchHistory(entry) {
       Array.isArray(journals) ? journals.join("\n") : (journals || "")
     );
   }
-  if ("local_folder" in data) setFieldValue("local-folder", data.local_folder || "");
+  if (data.local_folder) setFieldValue("local-folder", data.local_folder);
   if ("local_recursive" in data) {
     const recursive = document.getElementById("local-recursive");
     if (recursive) recursive.checked = !!data.local_recursive;
   }
   if (Array.isArray(data.sources)) {
     const wanted = new Set(data.sources.map(s => String(s)));
-    document.querySelectorAll("#source-list input[type=checkbox]").forEach(cb => {
+    document.querySelectorAll("#source-list input[data-online-source]").forEach(cb => {
       cb.checked = wanted.has(cb.value);
     });
+  }
+  if ("local_folder" in data) {
+    document.getElementById("source-local-pdfs").checked = !!data.local_folder;
+    updateLocalSourceOptions();
   }
   flashBanner("Restored previous search. Click Search papers to run it.", "info", 3500);
 }
@@ -605,7 +629,7 @@ function applyRunState(state) {
 
   if (Array.isArray(state.sources)) {
     const wanted = new Set(state.sources.map(source => String(source)));
-    document.querySelectorAll("#source-list input[type=checkbox]").forEach(cb => {
+    document.querySelectorAll("#source-list input[data-online-source]").forEach(cb => {
       cb.checked = wanted.has(cb.value);
     });
   }
@@ -621,7 +645,11 @@ function applyRunState(state) {
       Array.isArray(journals) ? journals.join("\n") : (journals || "")
     );
   }
-  if ("local_folder" in state) setFieldValue("local-folder", state.local_folder || "");
+  if (state.local_folder) setFieldValue("local-folder", state.local_folder);
+  if ("local_folder" in state) {
+    document.getElementById("source-local-pdfs").checked = !!state.local_folder;
+    updateLocalSourceOptions();
+  }
   if ("local_recursive" in state) {
     const recursive = document.getElementById("local-recursive");
     if (recursive) recursive.checked = !!state.local_recursive;
@@ -1808,14 +1836,20 @@ async function doSearch(options) {
   setBanner("");
   setSearchError("");
   const query = buildQuery();
-  const sources = [...document.querySelectorAll("#source-list input:checked")].map(c => c.value);
+  const sources = [...document.querySelectorAll("#source-list input[data-online-source]:checked")]
+    .map(c => c.value);
   const maxResults = parseInt(document.getElementById("max-results").value, 10) || 50;
   const years = readYearRange();
   const localFolder = document.getElementById("local-folder").value.trim();
   const localRecursive = document.getElementById("local-recursive").checked;
-  const localOnly = !!localFolder && !query && !sources.length;
+  const localEnabled = document.getElementById("source-local-pdfs").checked;
+  const localOnly = localEnabled && !!localFolder && !query && !sources.length;
   if (years.error) { setSearchError(years.error); return; }
-  if (localFolder) {
+  if (localEnabled && !localFolder) {
+    setSearchError("Choose a folder for Local PDFs, or unselect that source.");
+    return;
+  }
+  if (localEnabled) {
     // With a folder, an empty query + no websites means folder-only. Mixing
     // one without the other is ambiguous, so say exactly what to fix.
     if (query && !sources.length) {
@@ -1850,6 +1884,7 @@ async function doSearch(options) {
       year_to: years.year_to,
       local_folder: localFolder,
       local_recursive: localRecursive,
+      local_enabled: localEnabled,
       local_only: localOnly,
       merge,
     });
@@ -2994,7 +3029,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   queryModel.addTerm(queryModel.root);
   renderQuery();
   try {
-    await Promise.all([loadSources(), loadSettings()]);
+    await loadSources();
+    await loadSettings();
   } catch (e) { /* non-fatal */ }
   await loadRuns({ applyActive: true });
   await loadHistory();

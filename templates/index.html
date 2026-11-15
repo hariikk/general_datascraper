@@ -86,12 +86,13 @@
 
       <div class="row">
         <div class="col">
-          <label class="field-label">Websites to search</label>
+          <label class="field-label">Sources to search</label>
           <div id="source-list" class="checkbox-group"></div>
         </div>
         <div class="col col-narrow">
-          <label class="field-label" for="max-results">Max results / site</label>
+          <label class="field-label" for="max-results">Max results / website</label>
           <input type="text" inputmode="numeric" pattern="[0-9]*" data-numeric id="max-results" value="50">
+          <p class="hint">Applies separately to each selected website. Local PDFs are not limited by this value.</p>
         </div>
         <div class="col col-years">
           <label class="field-label">Publication years <span class="muted">(optional)</span></label>
@@ -111,16 +112,16 @@
         </div>
       </div>
 
-      <label class="field-label" for="local-folder">Local PDF folder <span class="muted">(optional - will ignore the Max results limit)</span></label>
-      <div class="local-folder-row">
-        <input type="text" id="local-folder" placeholder="e.g. C:\Users\me\Papers">
-        <label class="checkbox-inline" for="local-recursive">
-          <input type="checkbox" id="local-recursive"> Include subfolders
-        </label>
+      <div id="local-source-options" class="local-source-options hidden">
+        <label class="field-label" for="local-folder">PDF folder</label>
+        <div class="local-folder-row">
+          <input type="text" id="local-folder" placeholder="e.g. C:\Users\me\Papers">
+          <label class="checkbox-inline" for="local-recursive">
+            <input type="checkbox" id="local-recursive"> Include subfolders
+          </label>
+        </div>
+        <p class="hint">Local PDFs are scanned independently of website limits. Leave search terms and websites unselected to search this folder only.</p>
       </div>
-      <p class="hint">Point at a folder of PDFs to extract them without a search (clear the
-        search terms and websites), or combine them with a normal online search. PDFs are
-        copied into <code>output/pdfs/</code>, so the output stays self-contained.</p>
 
       <label class="field-label" for="excluded-journals">Exclude journals <span class="muted">(optional, one per line)</span></label>
       <textarea id="excluded-journals" rows="3" placeholder="e.g. Predatory Journal of Examples&#10;Journal of Questionable Results"></textarea>

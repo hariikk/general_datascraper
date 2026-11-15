@@ -84,6 +84,7 @@ def _default_settings():
         "year_from": year_from,
         "year_to": year_to,
         "local_folder": str(getattr(config, "LOCAL_PDF_DIR", "") or ""),
+        "local_enabled": bool(getattr(config, "LOCAL_PDF_DIR", "")),
         "local_recursive": bool(getattr(config, "LOCAL_PDF_RECURSIVE", False)),
     }
 
@@ -116,6 +117,10 @@ def load_settings():
                 d["year_from"] = defaults["year_from"]
                 d["year_to"] = defaults["year_to"]
             d["local_folder"] = str(d.get("local_folder") or "").strip()
+            if "local_enabled" in data:
+                d["local_enabled"] = _as_bool(data["local_enabled"])
+            else:
+                d["local_enabled"] = bool(d["local_folder"])
             d["local_recursive"] = _as_bool(d.get("local_recursive"))
             return d
         except Exception:
@@ -1167,6 +1172,10 @@ def api_settings():
                 return jsonify({"error": str(e)}), 400
         if data.get("local_folder") is not None:
             s["local_folder"] = str(data["local_folder"]).strip()
+        if "local_enabled" in data:
+            s["local_enabled"] = _as_bool(data["local_enabled"])
+        elif data.get("local_folder") is not None:
+            s["local_enabled"] = bool(s["local_folder"])
         if data.get("local_recursive") is not None:
             s["local_recursive"] = _as_bool(data["local_recursive"])
         save_settings(s)
@@ -1326,15 +1335,32 @@ def api_search():
 
     # Local folder: an omitted key falls back to the saved setting, while an
     # explicitly blank folder disables local PDFs for this search.
-    raw_local = "local_folder" in data or "local_recursive" in data
+    raw_local = (
+        "local_folder" in data
+        or "local_recursive" in data
+        or "local_enabled" in data
+    )
     if "local_folder" in data:
-        local_folder = str(data.get("local_folder") or "").strip()
+        configured_local_folder = str(data.get("local_folder") or "").strip()
     else:
-        local_folder = str(settings.get("local_folder") or "").strip()
+        configured_local_folder = str(settings.get("local_folder") or "").strip()
     if "local_recursive" in data:
         local_recursive = _as_bool(data.get("local_recursive"))
     else:
         local_recursive = _as_bool(settings.get("local_recursive"))
+    if "local_enabled" in data:
+        local_enabled = _as_bool(data.get("local_enabled"))
+    elif "local_folder" in data:
+        local_enabled = bool(configured_local_folder)
+    else:
+        local_enabled = _as_bool(
+            settings.get("local_enabled", bool(configured_local_folder))
+        )
+    if local_enabled and not configured_local_folder:
+        return jsonify({
+            "error": "Choose a local PDF folder for the Local PDFs source."
+        }), 400
+    local_folder = configured_local_folder if local_enabled else ""
     local_only = _as_bool(data.get("local_only"))
     if local_only and not local_folder:
         return jsonify({
@@ -1425,7 +1451,8 @@ def api_search():
             settings["year_from"] = year_from
             settings["year_to"] = year_to
         if raw_local:
-            settings["local_folder"] = local_folder
+            settings["local_folder"] = configured_local_folder
+            settings["local_enabled"] = local_enabled
             settings["local_recursive"] = local_recursive
         save_settings(settings)
     return jsonify({"job_id": job["id"]})
