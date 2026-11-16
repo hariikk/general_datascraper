@@ -204,7 +204,16 @@ def _call_ollama(prompt, fields):
         },
     }
     r = requests.post(f"{config.OLLAMA_URL}/api/generate", json=payload, timeout=900)
-    r.raise_for_status()
+    try:
+        r.raise_for_status()
+    except requests.HTTPError as exc:
+        detail = (r.text or "").strip()
+        if detail:
+            detail = detail[:1000]
+            raise requests.HTTPError(
+                f"{exc}; Ollama response: {detail}", response=r
+            ) from exc
+        raise
     return r.json().get("response", "")
 
 
