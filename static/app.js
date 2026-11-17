@@ -243,6 +243,7 @@ async function saveSettings() {
   try {
     const body = {
       email: document.getElementById("set-email").value.trim(),
+      model: document.getElementById("set-model").value.trim(),
       max_results: parseInt(document.getElementById("set-max").value, 10) || 50,
       excluded_journals: document.getElementById("excluded-journals").value,
       year_from: years.year_from,

@@ -101,9 +101,7 @@ def load_settings():
         try:
             data = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
             d = _default_settings()
-            d.update({
-                k: v for k, v in data.items() if k in d and k != "model"
-            })
+            d.update({k: v for k, v in data.items() if k in d})
             d["excluded_journals"] = filters.parse_journal_terms(
                 d.get("excluded_journals")
             )
@@ -129,10 +127,8 @@ def load_settings():
 
 
 def save_settings(s):
-    persisted = dict(s)
-    persisted.pop("model", None)
     SETTINGS_PATH.write_text(
-        json.dumps(persisted, indent=2, ensure_ascii=False), encoding="utf-8"
+        json.dumps(s, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
 
@@ -145,12 +141,18 @@ def _settings_payload(s):
     """
     payload = dict(s)
     payload["default_columns"] = [str(field[0]) for field in config.FIELDS]
+    # If web_settings.json has no model, fall back to config.OLLAMA_MODEL so
+    # the UI always displays a value on page load.
+    if not payload.get("model"):
+        payload["model"] = getattr(config, "OLLAMA_MODEL", "")
     return payload
 
 
 def apply_settings(s):
     config.NCBI_EMAIL = s.get("email") or config.NCBI_EMAIL
     config.HTTP_HEADERS = {"User-Agent": f"general-datascraper/1.0 (mailto:{config.NCBI_EMAIL})"}
+    if "model" in s and s["model"]:
+        config.OLLAMA_MODEL = s["model"]
     if "year_from" in s or "year_to" in s:
         try:
             config.YEAR_FROM, config.YEAR_TO = searchers.normalize_year_range(
@@ -1052,6 +1054,22 @@ def api_sources():
     ])
 
 
+def _ollama_model_names():
+    """Return installed Ollama model names, or [] on any failure."""
+    try:
+        r = requests.get(f"{config.OLLAMA_URL}/api/tags", timeout=5)
+        r.raise_for_status()
+    except Exception:
+        return []
+    return [m.get("name", "") for m in r.json().get("models", [])]
+
+
+@app.route("/api/ollama-models")
+def api_ollama_models():
+    """Return installed Ollama model names."""
+    return jsonify({"models": _ollama_model_names()})
+
+
 @app.route("/api/autocomplete")
 def api_autocomplete():
     """Proxy PubMed's autocomplete endpoint (avoids browser CORS issues).
@@ -1178,6 +1196,8 @@ def api_settings():
             s["local_enabled"] = bool(s["local_folder"])
         if data.get("local_recursive") is not None:
             s["local_recursive"] = _as_bool(data["local_recursive"])
+        if "model" in data and data["model"] is not None:
+            s["model"] = str(data["model"]).strip()
         save_settings(s)
         apply_settings(s)
         return jsonify(_settings_payload(s))

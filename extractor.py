@@ -153,7 +153,7 @@ def backend_status():
     if not found:
         return {
             "ok": False,
-            "message": f"Ollama is running, but the model '{model}' is not installed. Run:  ollama pull {model}",
+            "message": f"Ollama is running, but the model '{model}' is not installed.\n\nRun:  `ollama list`(list the LLM) or `ollama pull {model}` (install an LLM)",
             "model": model,
         }
     return {"ok": True, "message": f"Ollama ready ({model})", "model": model}
