@@ -283,7 +283,9 @@ class SearchApiJournalTests(unittest.TestCase):
 
     def _post(self, payload):
         with mock.patch.object(web, "_start_job", new=self._fake_start), \
-             mock.patch.object(web, "SETTINGS_PATH", self.settings_path):
+             mock.patch.object(web, "SETTINGS_PATH", self.settings_path), \
+             mock.patch.object(web.config, "LOCAL_PDF_DIR", ""), \
+             mock.patch.object(web.config, "LOCAL_PDF_RECURSIVE", False):
             return self.client.post("/api/search", json=payload)
 
     def test_new_client_exclusions_are_parsed_forwarded_and_persisted(self):
@@ -507,6 +509,31 @@ class LocalSearchApiTests(unittest.TestCase):
             ("A", ["pubmed"], 50, [], None, None, str(self.folder), True, None),
         )
 
+    def test_unselected_local_source_keeps_folder_setting_but_skips_it(self):
+        self.settings_path.write_text(
+            json.dumps({
+                "local_folder": str(self.folder),
+                "local_enabled": True,
+                "local_recursive": True,
+            }),
+            encoding="utf-8",
+        )
+        response = self._post({
+            "query": "A",
+            "sources": ["pubmed"],
+            "local_folder": str(self.folder),
+            "local_enabled": False,
+            "local_recursive": True,
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            self.calls[0][2],
+            ("A", ["pubmed"], 50, [], None, None, "", True, None),
+        )
+        saved = json.loads(self.settings_path.read_text(encoding="utf-8"))
+        self.assertEqual(saved["local_folder"], str(self.folder))
+        self.assertFalse(saved["local_enabled"])
+
 
 class SettingsApiLocalTests(unittest.TestCase):
     def setUp(self):
@@ -530,21 +557,58 @@ class SettingsApiLocalTests(unittest.TestCase):
         response = self._request("POST", {
             "local_folder": folder,
             "local_recursive": True,
+            "local_enabled": True,
         })
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["local_folder"], folder)
+        self.assertTrue(response.get_json()["local_enabled"])
         self.assertTrue(response.get_json()["local_recursive"])
 
         fetched = self._request("GET").get_json()
         self.assertEqual(fetched["local_folder"], folder)
+        self.assertTrue(fetched["local_enabled"])
         self.assertTrue(fetched["local_recursive"])
+
+    def test_local_source_can_be_disabled_without_clearing_its_folder(self):
+        folder = str(self.dir / "pdfs")
+        response = self._request("POST", {
+            "local_folder": folder,
+            "local_recursive": True,
+            "local_enabled": False,
+        })
+        self.assertEqual(response.status_code, 200)
+        fetched = self._request("GET").get_json()
+        self.assertEqual(fetched["local_folder"], folder)
+        self.assertFalse(fetched["local_enabled"])
 
     def test_missing_local_settings_default_to_config(self):
         with mock.patch.object(web.config, "LOCAL_PDF_DIR", "/configured/path"), \
              mock.patch.object(web.config, "LOCAL_PDF_RECURSIVE", True):
             fetched = self._request("GET").get_json()
         self.assertEqual(fetched["local_folder"], "/configured/path")
+        self.assertTrue(fetched["local_enabled"])
         self.assertTrue(fetched["local_recursive"])
+
+    def test_legacy_saved_model_does_not_override_config(self):
+        self.settings_path.write_text(
+            json.dumps({"model": "old-saved-model"}), encoding="utf-8"
+        )
+        with mock.patch.object(web, "SETTINGS_PATH", self.settings_path), \
+             mock.patch.object(web.config, "OLLAMA_MODEL", "configured-model"):
+            loaded = web.load_settings()
+            web.apply_settings(loaded)
+
+            self.assertEqual(loaded["model"], "configured-model")
+            self.assertEqual(web.config.OLLAMA_MODEL, "configured-model")
+
+    def test_posted_model_is_not_persisted(self):
+        with mock.patch.object(web.config, "OLLAMA_MODEL", "configured-model"):
+            response = self._request("POST", {"model": "posted-model"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["model"], "configured-model")
+        saved = json.loads(self.settings_path.read_text(encoding="utf-8"))
+        self.assertNotIn("model", saved)
 
 
 class SettingsApiJournalTests(unittest.TestCase):

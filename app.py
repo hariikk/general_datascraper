@@ -59,7 +59,7 @@ from main import (
 app = Flask(__name__)
 
 # --------------------------------------------------------------------------
-# Settings (persisted server-side so users don't retype email/model each time)
+# Settings (persisted server-side so users don't retype app preferences each time)
 # --------------------------------------------------------------------------
 
 SETTINGS_PATH = config.OUTPUT_DIR / "web_settings.json"
@@ -84,6 +84,7 @@ def _default_settings():
         "year_from": year_from,
         "year_to": year_to,
         "local_folder": str(getattr(config, "LOCAL_PDF_DIR", "") or ""),
+        "local_enabled": bool(getattr(config, "LOCAL_PDF_DIR", "")),
         "local_recursive": bool(getattr(config, "LOCAL_PDF_RECURSIVE", False)),
     }
 
@@ -114,6 +115,10 @@ def load_settings():
                 d["year_from"] = defaults["year_from"]
                 d["year_to"] = defaults["year_to"]
             d["local_folder"] = str(d.get("local_folder") or "").strip()
+            if "local_enabled" in data:
+                d["local_enabled"] = _as_bool(data["local_enabled"])
+            else:
+                d["local_enabled"] = bool(d["local_folder"])
             d["local_recursive"] = _as_bool(d.get("local_recursive"))
             return d
         except Exception:
@@ -122,7 +127,9 @@ def load_settings():
 
 
 def save_settings(s):
-    SETTINGS_PATH.write_text(json.dumps(s, indent=2, ensure_ascii=False), encoding="utf-8")
+    SETTINGS_PATH.write_text(
+        json.dumps(s, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
 
 def _settings_payload(s):
@@ -134,13 +141,18 @@ def _settings_payload(s):
     """
     payload = dict(s)
     payload["default_columns"] = [str(field[0]) for field in config.FIELDS]
+    # If web_settings.json has no model, fall back to config.OLLAMA_MODEL so
+    # the UI always displays a value on page load.
+    if not payload.get("model"):
+        payload["model"] = getattr(config, "OLLAMA_MODEL", "")
     return payload
 
 
 def apply_settings(s):
     config.NCBI_EMAIL = s.get("email") or config.NCBI_EMAIL
-    config.OLLAMA_MODEL = s.get("model") or config.OLLAMA_MODEL
     config.HTTP_HEADERS = {"User-Agent": f"general-datascraper/1.0 (mailto:{config.NCBI_EMAIL})"}
+    if "model" in s and s["model"]:
+        config.OLLAMA_MODEL = s["model"]
     if "year_from" in s or "year_to" in s:
         try:
             config.YEAR_FROM, config.YEAR_TO = searchers.normalize_year_range(
@@ -1042,6 +1054,22 @@ def api_sources():
     ])
 
 
+def _ollama_model_names():
+    """Return installed Ollama model names, or [] on any failure."""
+    try:
+        r = requests.get(f"{config.OLLAMA_URL}/api/tags", timeout=5)
+        r.raise_for_status()
+    except Exception:
+        return []
+    return [m.get("name", "") for m in r.json().get("models", [])]
+
+
+@app.route("/api/ollama-models")
+def api_ollama_models():
+    """Return installed Ollama model names."""
+    return jsonify({"models": _ollama_model_names()})
+
+
 @app.route("/api/autocomplete")
 def api_autocomplete():
     """Proxy PubMed's autocomplete endpoint (avoids browser CORS issues).
@@ -1138,8 +1166,6 @@ def api_settings():
         data = request.get_json(force=True, silent=True) or {}
         if data.get("email") is not None:
             s["email"] = str(data["email"]).strip()
-        if data.get("model") is not None:
-            s["model"] = str(data["model"]).strip()
         if data.get("max_results") is not None:
             try:
                 s["max_results"] = int(data["max_results"])
@@ -1164,8 +1190,14 @@ def api_settings():
                 return jsonify({"error": str(e)}), 400
         if data.get("local_folder") is not None:
             s["local_folder"] = str(data["local_folder"]).strip()
+        if "local_enabled" in data:
+            s["local_enabled"] = _as_bool(data["local_enabled"])
+        elif data.get("local_folder") is not None:
+            s["local_enabled"] = bool(s["local_folder"])
         if data.get("local_recursive") is not None:
             s["local_recursive"] = _as_bool(data["local_recursive"])
+        if "model" in data and data["model"] is not None:
+            s["model"] = str(data["model"]).strip()
         save_settings(s)
         apply_settings(s)
         return jsonify(_settings_payload(s))
@@ -1323,15 +1355,32 @@ def api_search():
 
     # Local folder: an omitted key falls back to the saved setting, while an
     # explicitly blank folder disables local PDFs for this search.
-    raw_local = "local_folder" in data or "local_recursive" in data
+    raw_local = (
+        "local_folder" in data
+        or "local_recursive" in data
+        or "local_enabled" in data
+    )
     if "local_folder" in data:
-        local_folder = str(data.get("local_folder") or "").strip()
+        configured_local_folder = str(data.get("local_folder") or "").strip()
     else:
-        local_folder = str(settings.get("local_folder") or "").strip()
+        configured_local_folder = str(settings.get("local_folder") or "").strip()
     if "local_recursive" in data:
         local_recursive = _as_bool(data.get("local_recursive"))
     else:
         local_recursive = _as_bool(settings.get("local_recursive"))
+    if "local_enabled" in data:
+        local_enabled = _as_bool(data.get("local_enabled"))
+    elif "local_folder" in data:
+        local_enabled = bool(configured_local_folder)
+    else:
+        local_enabled = _as_bool(
+            settings.get("local_enabled", bool(configured_local_folder))
+        )
+    if local_enabled and not configured_local_folder:
+        return jsonify({
+            "error": "Choose a local PDF folder for the Local PDFs source."
+        }), 400
+    local_folder = configured_local_folder if local_enabled else ""
     local_only = _as_bool(data.get("local_only"))
     if local_only and not local_folder:
         return jsonify({
@@ -1422,7 +1471,8 @@ def api_search():
             settings["year_from"] = year_from
             settings["year_to"] = year_to
         if raw_local:
-            settings["local_folder"] = local_folder
+            settings["local_folder"] = configured_local_folder
+            settings["local_enabled"] = local_enabled
             settings["local_recursive"] = local_recursive
         save_settings(settings)
     return jsonify({"job_id": job["id"]})

@@ -80,7 +80,7 @@ LLM_BACKEND = "ollama"
 
 # --- Ollama (local) ---
 OLLAMA_URL   = "http://localhost:11434"     # default Ollama port
-OLLAMA_MODEL = "qwen2.5:7b-instruct"        # your model (see: ollama list)
+OLLAMA_MODEL = "llama3.2:3b"
 
 # --- OpenAI-compatible (e.g. KI connect NRW) ---
 # Set LLM_BACKEND = "openai" and fill these in. Your institution gives you a

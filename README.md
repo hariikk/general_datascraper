@@ -335,7 +335,7 @@ Things to know:
 ## Publication-year range
 
 The Search card has optional **From year** / **To year** boxes next to
-**Max results / site**. Leave either box blank for no limit on that side and use
+**Max results / website**. Leave either box blank for no limit on that side and use
 four-digit years (for example `2015`). A start year after the end year is
 rejected with a clear message.
 
@@ -361,8 +361,9 @@ YEAR_TO = 2024
 Omit an option (or leave the config value as `None`) for an open end. The web
 app saves the years with its other settings, so they come back next time;
 clicking **Search papers** also saves an explicitly supplied range. Years saved
-in the web app override `config.py` while the app is running, just like the
-email and model settings.
+in the web app override `config.py` while the app is running, as do the email
+and other editable settings. The Ollama model is read only from `config.py`
+and is not overridden by saved web settings.
 
 How each website applies it:
 
@@ -389,15 +390,18 @@ which papers are available to the journal blocklist.
 
 ## Local PDF folder
 
-The Search card has an optional **Local PDF folder** box and an **Include
-subfolders** checkbox. Use it to work with PDFs you already have on your
+The Search card lists **Local PDFs** alongside the online websites. Select it
+to reveal the folder and **Include subfolders** controls. **Max results / website**
+applies independently to online sources; local PDFs are scanned independently
+of that limit. Use Local PDFs to work with files you already have on your
 computer:
 
 - **Combine with an online search** — type search terms, pick websites, and
-  choose a folder. Online results and local PDFs are merged into one dataset.
-- **Folder-only** — choose a folder, leave the search terms empty, and deselect
-  every website. ScrapeLite then skips the online search and works only on the
-  PDFs in that folder.
+  select Local PDFs and choose a folder. Online results and local PDFs are
+  merged into one dataset.
+- **Folder-only** — select Local PDFs and choose a folder, leave the search
+  terms empty, and deselect every website. ScrapeLite then skips the online
+  search and works only on the PDFs in that folder.
 
 Each usable PDF is copied (or hardlinked when possible) into `output/pdfs/`
 with a deterministic name of the form
@@ -460,6 +464,8 @@ MAX_LOCAL_PDFS = 500
 
 The web app saves the folder and the subfolder choice with its other settings
 (`output/web_settings.json`); those values override `config.py` while it runs.
+The Ollama model is an exception: set it in `config.py`, where the Settings
+panel displays it as read-only.
 The folder is only checked when you click **Search papers**, not when you save
 settings, and no public route serves files from your filesystem.
 
@@ -494,8 +500,8 @@ quoted by the same rule as the rest of the builder. The autocomplete dropdown
 only completes the term you are typing — it does not create OR groups.
 
 **Privacy:** autocomplete sends the typed text to NCBI/PubMed. LLM suggestions
-send the affected search term(s) to the LLM backend configured in `config.py`
-(or the Settings panel) — a local Ollama model keeps this on your machine, while
+send the affected search term(s) to the LLM backend configured in `config.py` —
+a local Ollama model keeps this on your machine, while
 an OpenAI-compatible endpoint sends them to that provider. Nothing else is sent,
 and neither feature changes the search or extraction pipeline.
 
